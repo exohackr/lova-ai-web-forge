@@ -9,13 +9,63 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          created_at: string | null
+          daily_uses_remaining: number | null
+          display_style: string | null
+          id: string
+          last_reset_date: string | null
+          total_uses: number | null
+          username: string
+        }
+        Insert: {
+          created_at?: string | null
+          daily_uses_remaining?: number | null
+          display_style?: string | null
+          id: string
+          last_reset_date?: string | null
+          total_uses?: number | null
+          username: string
+        }
+        Update: {
+          created_at?: string | null
+          daily_uses_remaining?: number | null
+          display_style?: string | null
+          id?: string
+          last_reset_date?: string | null
+          total_uses?: number | null
+          username?: string
+        }
+        Relationships: []
+      }
+      usage_logs: {
+        Row: {
+          id: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      reset_daily_uses: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

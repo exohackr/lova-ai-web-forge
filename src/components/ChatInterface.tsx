@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Send, Eye, Code, Loader2 } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ChatInterfaceProps {
   initialHtml: string;
@@ -32,6 +34,7 @@ export const ChatInterface = ({ initialHtml, onBack }: ChatInterfaceProps) => {
   const [currentHtml, setCurrentHtml] = useState(initialHtml);
   const [showCode, setShowCode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { user, profile, refreshProfile } = useAuth();
   const { toast } = useToast();
 
   const scrollToBottom = () => {
@@ -42,8 +45,72 @@ export const ChatInterface = ({ initialHtml, onBack }: ChatInterfaceProps) => {
     scrollToBottom();
   }, [messages]);
 
+  const trackUsage = async () => {
+    if (!user || !profile) return false;
+
+    // Check if user has uses remaining (diddy has unlimited)
+    if (profile.username !== 'diddy' && profile.daily_uses_remaining <= 0) {
+      toast({
+        title: "No uses remaining",
+        description: "You've used all your daily credits. More will be available tomorrow!",
+        variant: "destructive",
+      });
+      return false;
+    }
+
+    try {
+      // Log the usage
+      const { error: logError } = await supabase
+        .from('usage_logs')
+        .insert([{ user_id: user.id }]);
+
+      if (logError) {
+        console.error('Error logging usage:', logError);
+        return false;
+      }
+
+      // Update user's remaining uses and total uses (unless they're diddy)
+      if (profile.username !== 'diddy') {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ 
+            daily_uses_remaining: profile.daily_uses_remaining - 1,
+            total_uses: profile.total_uses + 1
+          })
+          .eq('id', user.id);
+
+        if (updateError) {
+          console.error('Error updating profile:', updateError);
+          return false;
+        }
+      } else {
+        // For diddy, just update total uses
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ 
+            total_uses: profile.total_uses + 1
+          })
+          .eq('id', user.id);
+
+        if (updateError) {
+          console.error('Error updating profile:', updateError);
+          return false;
+        }
+      }
+
+      await refreshProfile();
+      return true;
+    } catch (error) {
+      console.error('Error tracking usage:', error);
+      return false;
+    }
+  };
+
   const sendMessage = async () => {
     if (!inputMessage.trim() || isProcessing) return;
+
+    const canProceed = await trackUsage();
+    if (!canProceed) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -134,6 +201,15 @@ export const ChatInterface = ({ initialHtml, onBack }: ChatInterfaceProps) => {
             <h3 className="font-semibold text-gray-900">Chat with AI</h3>
           </div>
           <div className="flex items-center space-x-2">
+            {profile && (
+              <div className="text-sm text-gray-600">
+                {profile.username === 'diddy' ? (
+                  <span className="text-yellow-600 font-semibold">👑 Unlimited</span>
+                ) : (
+                  <span>{profile.daily_uses_remaining} uses left</span>
+                )}
+              </div>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -186,12 +262,12 @@ export const ChatInterface = ({ initialHtml, onBack }: ChatInterfaceProps) => {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              disabled={isProcessing}
+              disabled={isProcessing || (profile && profile.username !== 'diddy' && profile.daily_uses_remaining <= 0)}
               className="flex-1"
             />
             <Button 
               onClick={sendMessage} 
-              disabled={isProcessing || !inputMessage.trim()}
+              disabled={isProcessing || !inputMessage.trim() || (profile && profile.username !== 'diddy' && profile.daily_uses_remaining <= 0)}
               className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
             >
               <Send className="w-4 h-4" />
