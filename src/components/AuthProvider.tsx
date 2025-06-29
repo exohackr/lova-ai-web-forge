@@ -9,6 +9,9 @@ interface UserProfile {
   display_style: string;
   daily_uses_remaining: number;
   total_uses: number;
+  is_admin?: boolean;
+  is_banned?: boolean;
+  ban_expires_at?: string | null;
 }
 
 interface AuthContextType {
@@ -53,6 +56,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (error) {
         console.error('Error fetching profile:', error);
         return;
+      }
+
+      // Check if user is banned and if temp ban has expired
+      if (data.is_banned && data.ban_expires_at) {
+        const banExpiry = new Date(data.ban_expires_at);
+        if (banExpiry < new Date()) {
+          // Temp ban has expired, unban the user
+          await supabase
+            .from('profiles')
+            .update({ is_banned: false, ban_expires_at: null })
+            .eq('id', userId);
+          
+          data.is_banned = false;
+          data.ban_expires_at = null;
+        }
       }
 
       setProfile(data);

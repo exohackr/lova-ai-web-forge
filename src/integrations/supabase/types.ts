@@ -9,31 +9,91 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      api_keys: {
+        Row: {
+          id: string
+          key_name: string
+          key_value: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          key_name: string
+          key_value: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          key_name?: string
+          key_value?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      blacklisted_ips: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          ip_address: unknown
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          ip_address: unknown
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          ip_address?: unknown
+          reason?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
+          ban_expires_at: string | null
           created_at: string | null
           daily_uses_remaining: number | null
           display_style: string | null
           id: string
+          is_admin: boolean | null
+          is_banned: boolean | null
           last_reset_date: string | null
+          registration_ip: unknown | null
           total_uses: number | null
           username: string
         }
         Insert: {
+          ban_expires_at?: string | null
           created_at?: string | null
           daily_uses_remaining?: number | null
           display_style?: string | null
           id: string
+          is_admin?: boolean | null
+          is_banned?: boolean | null
           last_reset_date?: string | null
+          registration_ip?: unknown | null
           total_uses?: number | null
           username: string
         }
         Update: {
+          ban_expires_at?: string | null
           created_at?: string | null
           daily_uses_remaining?: number | null
           display_style?: string | null
           id?: string
+          is_admin?: boolean | null
+          is_banned?: boolean | null
           last_reset_date?: string | null
+          registration_ip?: unknown | null
           total_uses?: number | null
           username?: string
         }
