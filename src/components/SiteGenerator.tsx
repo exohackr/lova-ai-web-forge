@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -215,8 +214,10 @@ export const SiteGenerator = () => {
         </Card>
       ) : (
         <ChatInterface 
-          initialHtml={generatedHtml}
-          onBack={() => setShowChat(false)}
+          onResponse={(response) => {
+            // Handle AI response if needed
+            console.log("AI Response:", response);
+          }}
         />
       )}
     </div>

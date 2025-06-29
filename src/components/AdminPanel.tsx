@@ -63,7 +63,13 @@ export const AdminPanel = () => {
         return;
       }
 
-      setUsers(data || []);
+      // Type the data properly with null handling for registration_ip
+      const typedUsers: UserProfile[] = (data || []).map(user => ({
+        ...user,
+        registration_ip: user.registration_ip ? String(user.registration_ip) : null
+      }));
+
+      setUsers(typedUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
     }
@@ -427,7 +433,8 @@ export const AdminPanel = () => {
         return;
       }
 
-      setFoundUserIp(data.registration_ip || "No IP recorded");
+      const ipValue = data.registration_ip ? String(data.registration_ip) : "No IP recorded";
+      setFoundUserIp(ipValue);
     } catch (error) {
       toast({
         title: "Error",
