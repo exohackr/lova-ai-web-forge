@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { User, Menu, X, Sparkles, Trophy, Crown } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
@@ -15,6 +15,7 @@ export const Header = () => {
   const [siteSettings, setSiteSettings] = useState({ site_name: "Lova AI", site_icon: "" });
   const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     loadSiteSettings();
@@ -40,6 +41,11 @@ export const Header = () => {
     } catch (error) {
       console.error('Error loading site settings:', error);
     }
+  };
+
+  const handleNavigation = (path: string) => {
+    navigate(path);
+    setIsMenuOpen(false);
   };
 
   const getDisplayName = () => {
@@ -88,7 +94,7 @@ export const Header = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 cursor-pointer" onClick={() => handleNavigation('/')}>
               <div className="w-8 h-8 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg flex items-center justify-center">
                 {siteSettings.site_icon ? (
                   <img src={siteSettings.site_icon} alt="Logo" className="w-5 h-5" />
@@ -104,20 +110,32 @@ export const Header = () => {
             {/* Navigation */}
             <nav className="hidden md:flex items-center space-x-8">
               <button 
-                onClick={() => navigate('/features')}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
+                onClick={() => handleNavigation('/features')}
+                className={`transition-colors ${
+                  location.pathname === '/features' 
+                    ? 'text-purple-600 font-semibold' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
                 Features
               </button>
               <button 
-                onClick={() => navigate('/examples')}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
+                onClick={() => handleNavigation('/examples')}
+                className={`transition-colors ${
+                  location.pathname === '/examples' 
+                    ? 'text-purple-600 font-semibold' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
                 Examples
               </button>
               <button 
-                onClick={() => navigate('/pricing')}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
+                onClick={() => handleNavigation('/pricing')}
+                className={`transition-colors ${
+                  location.pathname === '/pricing' 
+                    ? 'text-purple-600 font-semibold' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
                 Pricing
               </button>
@@ -169,7 +187,7 @@ export const Header = () => {
                 </div>
               ) : (
                 <Button 
-                  onClick={() => navigate("/auth")}
+                  onClick={() => handleNavigation("/auth")}
                   className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
                 >
                   Sign In
@@ -193,19 +211,19 @@ export const Header = () => {
             <div className="md:hidden py-4 border-t border-gray-200">
               <div className="flex flex-col space-y-3">
                 <button 
-                  onClick={() => navigate('/features')}
+                  onClick={() => handleNavigation('/features')}
                   className="text-gray-600 hover:text-gray-900 transition-colors text-left"
                 >
                   Features
                 </button>
                 <button 
-                  onClick={() => navigate('/examples')}
+                  onClick={() => handleNavigation('/examples')}
                   className="text-gray-600 hover:text-gray-900 transition-colors text-left"
                 >
                   Examples
                 </button>
                 <button 
-                  onClick={() => navigate('/pricing')}
+                  onClick={() => handleNavigation('/pricing')}
                   className="text-gray-600 hover:text-gray-900 transition-colors text-left"
                 >
                   Pricing

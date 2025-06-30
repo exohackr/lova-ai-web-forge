@@ -12,6 +12,14 @@ interface UserProfile {
   is_admin?: boolean;
   is_banned?: boolean;
   ban_expires_at?: string | null;
+  is_moderator?: boolean;
+  has_subscription?: boolean;
+  subscription_type?: string | null;
+  subscription_expires_at?: string | null;
+  profile_picture?: string | null;
+  custom_color?: string | null;
+  tags?: string[] | null;
+  registration_ip?: string | null;
 }
 
 interface AuthContextType {
@@ -89,6 +97,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -104,6 +113,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session check:', session?.user?.email);
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -126,12 +136,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const signup = async (email: string, password: string, username: string) => {
+    // Get user's IP address for registration tracking
+    let userIP = null;
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      userIP = data.ip;
+    } catch (error) {
+      console.error('Failed to get IP:', error);
+    }
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          username: username
+          username: username,
+          ip: userIP
         },
         emailRedirectTo: `${window.location.origin}/`
       }
