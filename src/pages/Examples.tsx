@@ -2,7 +2,7 @@
 import { Header } from "@/components/Header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ExternalLink } from "lucide-react";
+import { FileText } from "lucide-react";
 import { AnimatedBackground } from "@/components/AnimatedBackground";
 
 const Examples = () => {
@@ -75,7 +75,7 @@ const Examples = () => {
                 <div className="p-6">
                   <h3 className="text-xl font-bold text-gray-900 mb-2">{example.title}</h3>
                   <p className="text-gray-600 mb-4">{example.description}</p>
-                  <div className="flex flex-wrap gap-2 mb-4">
+                  <div className="flex flex-wrap gap-2">
                     {example.tags.map((tag, tagIndex) => (
                       <span 
                         key={tagIndex}
@@ -85,10 +85,6 @@ const Examples = () => {
                       </span>
                     ))}
                   </div>
-                  <Button variant="outline" className="w-full group">
-                    View Example
-                    <ExternalLink className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                  </Button>
                 </div>
               </Card>
             ))}

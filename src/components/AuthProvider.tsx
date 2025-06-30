@@ -81,7 +81,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       }
 
-      setProfile(data);
+      // Properly type the registration_ip field
+      const typedProfile: UserProfile = {
+        ...data,
+        registration_ip: data.registration_ip ? String(data.registration_ip) : null
+      };
+
+      setProfile(typedProfile);
     } catch (error) {
       console.error('Error fetching profile:', error);
     }

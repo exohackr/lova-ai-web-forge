@@ -75,29 +75,29 @@ const Pricing = () => {
                   <span className="text-4xl font-bold text-purple-600">$8.99</span>
                   <span className="text-gray-500 ml-2">/month</span>
                 </div>
-                <ul className="space-y-4 mb-8">
+                <ul className="space-y-4 mb-8 text-left">
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    50 website generations per day
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>50 website generations per day</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    High-quality AI generation
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>High-quality AI generation</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    Standard support
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>Standard support</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    Basic templates
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>Basic templates</span>
                   </li>
                 </ul>
                 <Button 
                   className="w-full bg-purple-600 hover:bg-purple-700"
                   onClick={() => handlePurchase(paypalLinks.basic, 'Basic')}
                 >
-                  Get Started
+                  Upgrade Now
                 </Button>
               </div>
             </Card>
@@ -116,26 +116,26 @@ const Pricing = () => {
                   <span className="text-4xl font-bold text-purple-600">$12.99</span>
                   <span className="text-gray-500 ml-2">/month</span>
                 </div>
-                <ul className="space-y-4 mb-8">
+                <ul className="space-y-4 mb-8 text-left">
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
                     <span className="font-semibold">200 website generations per day</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
                     <span className="font-semibold">Premium AI model</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    Priority support
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>Priority support</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    Advanced templates & customization
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>Advanced templates & customization</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    Export source code
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>Export source code</span>
                   </li>
                 </ul>
                 <Button 
@@ -158,30 +158,30 @@ const Pricing = () => {
                   <span className="text-4xl font-bold text-yellow-600">???</span>
                   <span className="text-gray-500 ml-2">Contact us</span>
                 </div>
-                <ul className="space-y-4 mb-8">
+                <ul className="space-y-4 mb-8 text-left">
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
                     <span className="font-semibold">Unlimited generations</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
                     <span className="font-semibold">Top AI model access</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    Dedicated support team
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>Dedicated support team</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    Team collaboration features
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>Team collaboration features</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    White-label options
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>White-label options</span>
                   </li>
                   <li className="flex items-center">
-                    <Check className="w-5 h-5 text-green-500 mr-3" />
-                    Custom integrations
+                    <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                    <span>Custom integrations</span>
                   </li>
                 </ul>
                 <Button 
