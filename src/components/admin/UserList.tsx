@@ -16,7 +16,18 @@ export const UserList = ({ users }: UserListProps) => {
             <div className="flex items-center space-x-3">
               <span className="font-medium">{user.username}</span>
               {user.is_admin && <Badge variant="secondary">Admin</Badge>}
+              {user.is_moderator && <Badge className="bg-blue-100 text-blue-800">Moderator</Badge>}
+              {user.has_subscription && <Badge className="bg-green-100 text-green-800">Subscribed</Badge>}
               {user.is_banned && <Badge variant="destructive">Banned</Badge>}
+              {user.tags && user.tags.length > 0 && (
+                <div className="flex space-x-1">
+                  {user.tags.map((tag, index) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex space-x-4 text-sm text-gray-600">
               <span>Uses: {user.daily_uses_remaining}</span>

@@ -9,6 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      announcements: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+          is_persistent: boolean | null
+          message: string
+          title: string
+          type: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_persistent?: boolean | null
+          message: string
+          title: string
+          type?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_persistent?: boolean | null
+          message?: string
+          title?: string
+          type?: string | null
+        }
+        Relationships: []
+      }
       api_keys: {
         Row: {
           id: string
@@ -61,41 +97,89 @@ export type Database = {
         Row: {
           ban_expires_at: string | null
           created_at: string | null
+          custom_color: string | null
           daily_uses_remaining: number | null
           display_style: string | null
+          has_subscription: boolean | null
           id: string
           is_admin: boolean | null
           is_banned: boolean | null
+          is_moderator: boolean | null
           last_reset_date: string | null
+          last_username_change: string | null
+          profile_picture: string | null
           registration_ip: unknown | null
+          subscription_expires_at: string | null
+          subscription_type: string | null
+          tags: string[] | null
           total_uses: number | null
           username: string
         }
         Insert: {
           ban_expires_at?: string | null
           created_at?: string | null
+          custom_color?: string | null
           daily_uses_remaining?: number | null
           display_style?: string | null
+          has_subscription?: boolean | null
           id: string
           is_admin?: boolean | null
           is_banned?: boolean | null
+          is_moderator?: boolean | null
           last_reset_date?: string | null
+          last_username_change?: string | null
+          profile_picture?: string | null
           registration_ip?: unknown | null
+          subscription_expires_at?: string | null
+          subscription_type?: string | null
+          tags?: string[] | null
           total_uses?: number | null
           username: string
         }
         Update: {
           ban_expires_at?: string | null
           created_at?: string | null
+          custom_color?: string | null
           daily_uses_remaining?: number | null
           display_style?: string | null
+          has_subscription?: boolean | null
           id?: string
           is_admin?: boolean | null
           is_banned?: boolean | null
+          is_moderator?: boolean | null
           last_reset_date?: string | null
+          last_username_change?: string | null
+          profile_picture?: string | null
           registration_ip?: unknown | null
+          subscription_expires_at?: string | null
+          subscription_type?: string | null
+          tags?: string[] | null
           total_uses?: number | null
           username?: string
+        }
+        Relationships: []
+      }
+      system_settings: {
+        Row: {
+          id: string
+          setting_name: string
+          setting_value: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          setting_name: string
+          setting_value?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          setting_name?: string
+          setting_value?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: []
       }
