@@ -1,11 +1,13 @@
 
-import { useState, useEffect } from "react";
-import { Input } from "@/components/ui/input";
+import { useState, useMemo } from "react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Filter, Download, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, Download, Users, Ban, Crown, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { UserProfile } from "./types";
@@ -20,69 +22,42 @@ export const UserSearchFilter = ({ users, onUserUpdate }: UserSearchFilterProps)
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
 
-  useEffect(() => {
-    let filtered = users;
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => {
+      const matchesSearch = !searchTerm || 
+        user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.id.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesRole = roleFilter === "all" || 
+        (roleFilter === "admin" && user.is_admin) ||
+        (roleFilter === "moderator" && user.is_moderator) ||
+        (roleFilter === "user" && !user.is_admin && !user.is_moderator);
+      
+      const matchesStatus = statusFilter === "all" ||
+        (statusFilter === "banned" && user.is_banned) ||
+        (statusFilter === "active" && !user.is_banned) ||
+        (statusFilter === "unlimited" && user.has_unlimited_uses);
 
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(user => 
-        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.id.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Role filter
-    if (roleFilter !== "all") {
-      filtered = filtered.filter(user => {
-        switch (roleFilter) {
-          case "admin": return user.is_admin;
-          case "moderator": return user.is_moderator;
-          case "subscriber": return user.has_subscription;
-          case "regular": return !user.is_admin && !user.is_moderator && !user.has_subscription;
-          default: return true;
-        }
-      });
-    }
-
-    // Status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter(user => {
-        switch (statusFilter) {
-          case "banned": return user.is_banned;
-          case "active": return !user.is_banned;
-          case "unlimited": return user.daily_uses_remaining === 999999;
-          default: return true;
-        }
-      });
-    }
-
-    setFilteredUsers(filtered);
+      return matchesSearch && matchesRole && matchesStatus;
+    });
   }, [users, searchTerm, roleFilter, statusFilter]);
 
-  const exportUsers = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + 
-      "Username,Email,Total Uses,Daily Uses,Role,Status,Created At\n" +
-      filteredUsers.map(user => 
-        `${user.username},${user.id},${user.total_uses},${user.daily_uses_remaining},` +
-        `${user.is_admin ? 'Admin' : user.is_moderator ? 'Moderator' : 'User'},` +
-        `${user.is_banned ? 'Banned' : 'Active'},${user.created_at}`
-      ).join("\n");
+  const handleUserSelect = (userId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedUsers(prev => [...prev, userId]);
+    } else {
+      setSelectedUsers(prev => prev.filter(id => id !== userId));
+    }
+  };
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "users_export.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    toast({
-      title: "Success",
-      description: "User data exported successfully",
-    });
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedUsers(filteredUsers.map(user => user.id));
+    } else {
+      setSelectedUsers([]);
+    }
   };
 
   const bulkBanUsers = async () => {
@@ -104,6 +79,7 @@ export const UserSearchFilter = ({ users, onUserUpdate }: UserSearchFilterProps)
       setSelectedUsers([]);
       onUserUpdate();
     } catch (error) {
+      console.error('Error banning users:', error);
       toast({
         title: "Error",
         description: "Failed to ban users",
@@ -118,7 +94,7 @@ export const UserSearchFilter = ({ users, onUserUpdate }: UserSearchFilterProps)
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ is_banned: false, ban_expires_at: null })
+        .update({ is_banned: false })
         .in('id', selectedUsers);
 
       if (error) throw error;
@@ -131,6 +107,7 @@ export const UserSearchFilter = ({ users, onUserUpdate }: UserSearchFilterProps)
       setSelectedUsers([]);
       onUserUpdate();
     } catch (error) {
+      console.error('Error unbanning users:', error);
       toast({
         title: "Error",
         description: "Failed to unban users",
@@ -139,137 +116,221 @@ export const UserSearchFilter = ({ users, onUserUpdate }: UserSearchFilterProps)
     }
   };
 
-  const toggleUserSelection = (userId: string) => {
-    setSelectedUsers(prev => 
-      prev.includes(userId) 
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
-    );
+  const bulkAddUses = async () => {
+    if (selectedUsers.length === 0) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ daily_uses_remaining: 50 })
+        .in('id', selectedUsers);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Added 50 uses to ${selectedUsers.length} users`,
+      });
+
+      setSelectedUsers([]);
+      onUserUpdate();
+    } catch (error) {
+      console.error('Error adding uses:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add uses",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const exportUsers = () => {
+    const csvContent = "data:text/csv;charset=utf-8," + 
+      "Username,ID,Email,Total Uses,Daily Uses Remaining,Is Admin,Is Moderator,Is Banned,Has Unlimited Uses,Tag,Tag Color\n" +
+      filteredUsers.map(user => 
+        `"${user.username || ''}","${user.id}","${user.email || ''}","${user.total_uses}","${user.daily_uses_remaining}","${user.is_admin}","${user.is_moderator}","${user.is_banned}","${user.has_unlimited_uses}","${user.tag || ''}","${user.tag_color || ''}"`
+      ).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `users_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "Success",
+      description: "User data exported successfully",
+    });
+  };
+
+  const getUserRole = (user: UserProfile) => {
+    if (user.is_admin) return "Admin";
+    if (user.is_moderator) return "Moderator";
+    return "User";
+  };
+
+  const getRoleColor = (user: UserProfile) => {
+    if (user.is_admin) return "destructive";
+    if (user.is_moderator) return "secondary";
+    return "outline";
   };
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-        <Search className="w-5 h-5 mr-2" />
-        Advanced User Search & Management
-      </h3>
-
-      <div className="flex flex-wrap gap-4">
-        <div className="flex-1 min-w-64">
-          <Input
-            placeholder="Search by username or ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full"
-          />
-        </div>
-
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Filter by role" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Roles</SelectItem>
-            <SelectItem value="admin">Admins</SelectItem>
-            <SelectItem value="moderator">Moderators</SelectItem>
-            <SelectItem value="subscriber">Subscribers</SelectItem>
-            <SelectItem value="regular">Regular Users</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="banned">Banned</SelectItem>
-            <SelectItem value="unlimited">Unlimited Uses</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Button onClick={exportUsers} variant="outline" size="sm">
-          <Download className="w-4 h-4 mr-1" />
-          Export CSV
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+          <Search className="w-5 h-5 mr-2" />
+          Advanced User Search & Management
+        </h3>
+        
+        <Button onClick={exportUsers} variant="outline" className="flex items-center gap-2">
+          <Download className="w-4 h-4" />
+          Export ({filteredUsers.length})
         </Button>
       </div>
 
-      {selectedUsers.length > 0 && (
-        <div className="flex gap-2 p-4 bg-gray-50 rounded-lg">
-          <span className="text-sm font-medium">{selectedUsers.length} users selected:</span>
-          <Button onClick={bulkBanUsers} variant="destructive" size="sm">
-            <Trash2 className="w-4 h-4 mr-1" />
-            Bulk Ban
-          </Button>
-          <Button onClick={bulkUnbanUsers} variant="outline" size="sm">
-            Bulk Unban
-          </Button>
-          <Button onClick={() => setSelectedUsers([])} variant="ghost" size="sm">
-            Clear Selection
-          </Button>
+      {/* Search and Filters */}
+      <Card className="p-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Search by username or ID..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by role" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              <SelectItem value="admin">Admins</SelectItem>
+              <SelectItem value="moderator">Moderators</SelectItem>
+              <SelectItem value="user">Users</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="banned">Banned</SelectItem>
+              <SelectItem value="unlimited">Unlimited Uses</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <div className="flex items-center space-x-2">
+            <Users className="w-4 h-4 text-gray-600" />
+            <span className="text-sm text-gray-600">
+              {filteredUsers.length} users found
+            </span>
+          </div>
         </div>
+      </Card>
+
+      {/* Bulk Actions */}
+      {selectedUsers.length > 0 && (
+        <Card className="p-4 bg-blue-50 border-blue-200">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">
+              {selectedUsers.length} users selected
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={bulkAddUses}>
+                Add 50 Uses
+              </Button>
+              <Button variant="outline" size="sm" onClick={bulkUnbanUsers}>
+                Unban Selected
+              </Button>
+              <Button variant="destructive" size="sm" onClick={bulkBanUsers}>
+                <Ban className="w-3 h-3 mr-1" />
+                Ban Selected
+              </Button>
+            </div>
+          </div>
+        </Card>
       )}
 
-      <div className="border rounded-lg">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-12">Select</TableHead>
-              <TableHead>Username</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Uses</TableHead>
-              <TableHead>Created</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredUsers.slice(0, 50).map((user) => (
-              <TableRow key={user.id}>
-                <TableCell>
-                  <input
-                    type="checkbox"
-                    checked={selectedUsers.includes(user.id)}
-                    onChange={() => toggleUserSelection(user.id)}
-                    className="w-4 h-4"
+      {/* Users Table */}
+      <Card>
+        <div className="max-h-96 overflow-y-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
+                    onCheckedChange={handleSelectAll}
                   />
-                </TableCell>
-                <TableCell className="font-medium">{user.username}</TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    {user.is_admin && <Badge variant="destructive">Admin</Badge>}
-                    {user.is_moderator && <Badge variant="secondary">Mod</Badge>}
-                    {user.has_subscription && <Badge variant="default">Sub</Badge>}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {user.is_banned ? (
-                    <Badge variant="destructive">Banned</Badge>
-                  ) : (
-                    <Badge variant="default">Active</Badge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {user.daily_uses_remaining === 999999 ? (
-                    <Badge variant="secondary">Unlimited</Badge>
-                  ) : (
-                    `${user.daily_uses_remaining}/${user.total_uses}`
-                  )}
-                </TableCell>
-                <TableCell>
-                  {new Date(user.created_at || '').toLocaleDateString()}
-                </TableCell>
+                </TableHead>
+                <TableHead>Username</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Uses</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Tag</TableHead>
+                <TableHead>Total Uses</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {filteredUsers.length > 50 && (
-        <p className="text-sm text-gray-600 text-center">
-          Showing first 50 of {filteredUsers.length} results. Use filters to narrow down.
-        </p>
-      )}
+            </TableHeader>
+            <TableBody>
+              {filteredUsers.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selectedUsers.includes(user.id)}
+                      onCheckedChange={(checked) => handleUserSelect(user.id, checked as boolean)}
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center space-x-2">
+                      <span>{user.username || 'Unknown'}</span>
+                      {user.has_unlimited_uses && (
+                        <Crown className="w-3 h-3 text-yellow-600" />
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={getRoleColor(user) as any}>
+                      {getUserRole(user)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {user.has_unlimited_uses ? (
+                      <Badge variant="secondary">Unlimited</Badge>
+                    ) : (
+                      <span>{user.daily_uses_remaining}/5</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={user.is_banned ? "destructive" : "default"}>
+                      {user.is_banned ? "Banned" : "Active"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {user.tag && (
+                      <Badge 
+                        variant="outline" 
+                        style={{ backgroundColor: user.tag_color || '#gray', color: 'white' }}
+                      >
+                        {user.tag}
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>{user.total_uses}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
     </div>
   );
 };

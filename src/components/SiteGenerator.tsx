@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Loader2, Wand2, Lock } from "lucide-react";
+import { Loader2, Wand2, Lock, Eye, Code, Download } from "lucide-react";
 import { ChatInterface } from "@/components/ChatInterface";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,8 @@ export const SiteGenerator = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState("");
   const [showChat, setShowChat] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showCode, setShowCode] = useState(false);
   const { user, profile, refreshProfile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -104,6 +106,7 @@ export const SiteGenerator = () => {
       const prompt = `Generate a complete, modern, and fully responsive HTML document for a website based on the following description.
       The HTML should be well-structured, include a <head> section with appropriate meta tags for responsiveness and title, and a <body> section.
       Use Tailwind CSS classes exclusively for all styling. Do not include any <style> tags or inline CSS.
+      Make sure to include the Tailwind CSS CDN link in the head section.
       Ensure good visual design, layout, and user experience. Include dummy content where appropriate.
       Description: ${description}`;
 
@@ -124,12 +127,14 @@ export const SiteGenerator = () => {
         const generatedText = result.candidates[0].content.parts[0].text;
         const htmlMatch = generatedText.match(/```html\n(.*?)```/s);
         const htmlContent = htmlMatch ? htmlMatch[1] : generatedText;
+        
         setGeneratedHtml(htmlContent);
         setShowChat(true);
+        setShowPreview(true);
         
         toast({
           title: "Site generated!",
-          description: "Your website has been created successfully.",
+          description: "Your website has been created successfully. You can now preview, view code, or download it.",
         });
       } else {
         throw new Error("No content generated");
@@ -144,6 +149,33 @@ export const SiteGenerator = () => {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const downloadHtml = () => {
+    if (!generatedHtml) return;
+    
+    const blob = new Blob([generatedHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'generated-website.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Download started",
+      description: "Your website HTML file is being downloaded.",
+    });
+  };
+
+  const startOver = () => {
+    setGeneratedHtml("");
+    setShowChat(false);
+    setShowPreview(false);
+    setShowCode(false);
+    setDescription("");
   };
 
   if (!user) {
@@ -214,11 +246,90 @@ export const SiteGenerator = () => {
           </div>
         </Card>
       ) : (
-        <ChatInterface 
-          onResponse={(response) => {
-            console.log("AI Response:", response);
-          }}
-        />
+        <div className="space-y-6">
+          {/* Generated Site Controls */}
+          <Card className="p-6 bg-white/80 backdrop-blur-xl border-white/20 shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Your Generated Website</h3>
+              <div className="flex gap-2">
+                <Button
+                  variant={showPreview ? "default" : "outline"}
+                  onClick={() => { setShowPreview(true); setShowCode(false); }}
+                  className="flex items-center gap-2"
+                >
+                  <Eye className="w-4 h-4" />
+                  Preview
+                </Button>
+                <Button
+                  variant={showCode ? "default" : "outline"}
+                  onClick={() => { setShowCode(true); setShowPreview(false); }}
+                  className="flex items-center gap-2"
+                >
+                  <Code className="w-4 h-4" />
+                  View Code
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={downloadHtml}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download HTML
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={startOver}
+                >
+                  Start Over
+                </Button>
+              </div>
+            </div>
+
+            {/* Website Preview */}
+            {showPreview && generatedHtml && (
+              <div className="border rounded-lg overflow-hidden bg-white">
+                <div className="bg-gray-100 px-4 py-2 text-sm text-gray-600 border-b">
+                  Website Preview
+                </div>
+                <iframe
+                  srcDoc={generatedHtml}
+                  className="w-full h-96 border-0"
+                  title="Generated Website Preview"
+                  sandbox="allow-scripts allow-same-origin"
+                />
+              </div>
+            )}
+
+            {/* Code View */}
+            {showCode && generatedHtml && (
+              <div className="border rounded-lg overflow-hidden bg-white">
+                <div className="bg-gray-100 px-4 py-2 text-sm text-gray-600 border-b flex justify-between items-center">
+                  HTML Source Code
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedHtml);
+                      toast({ title: "Copied!", description: "HTML code copied to clipboard" });
+                    }}
+                  >
+                    Copy Code
+                  </Button>
+                </div>
+                <pre className="p-4 text-sm overflow-auto max-h-96 bg-gray-50">
+                  <code>{generatedHtml}</code>
+                </pre>
+              </div>
+            )}
+          </Card>
+
+          {/* Chat Interface */}
+          <ChatInterface 
+            onResponse={(response) => {
+              console.log("AI Response:", response);
+            }}
+          />
+        </div>
       )}
     </div>
   );
