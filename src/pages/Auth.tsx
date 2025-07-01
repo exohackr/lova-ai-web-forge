@@ -15,23 +15,27 @@ const Auth = () => {
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [signupData, setSignupData] = useState({ email: "", password: "", username: "" });
   const [isVisible, setIsVisible] = useState(false);
+  const [pageLoaded, setPageLoaded] = useState(false);
   const { login, signup, user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Add fade-in animation
-    const timer = setTimeout(() => setIsVisible(true), 100);
+    // Small delay to ensure everything is loaded
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+      setPageLoaded(true);
+    }, 100);
     return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    // Only redirect if user is authenticated and not loading
-    if (user && !authLoading) {
+    // Only redirect if user is authenticated and auth is not loading
+    if (user && !authLoading && pageLoaded) {
       console.log('User authenticated, redirecting to home');
       navigate("/", { replace: true });
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, pageLoaded, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +54,6 @@ const Auth = () => {
           title: "Welcome back!",
           description: "You've been successfully logged in.",
         });
-        // Don't manually navigate here, let the useEffect handle it
       }
     } catch (error) {
       toast({
@@ -92,11 +95,14 @@ const Auth = () => {
     }
   };
 
-  // Show loading state while checking authentication
-  if (authLoading) {
+  // Show loading only during initial auth check
+  if (!pageLoaded || (authLoading && !isVisible)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-purple-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading...</p>
+        </div>
       </div>
     );
   }

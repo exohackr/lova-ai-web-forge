@@ -34,7 +34,7 @@ const Examples = () => {
     {
       title: "Blog Website",
       description: "Clean and readable blog layout with categories and search functionality",
-      image: "https://images.unsplash.com/photo-1486312338219-ce68e2c4c6f2?w=500&h=300&fit=crop",
+      image: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=500&h=300&fit=crop",
       tags: ["Blog", "Content", "SEO"]
     },
     {

@@ -38,7 +38,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    // Instead of throwing an error, return a default state
     console.warn("useAuth called outside of AuthProvider, returning default state");
     return {
       user: null,
@@ -63,6 +62,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -92,7 +92,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
       }
 
-      // Properly type the registration_ip field
       const typedProfile: UserProfile = {
         ...data,
         registration_ip: data.registration_ip ? String(data.registration_ip) : null
@@ -112,40 +111,70 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   useEffect(() => {
     let mounted = true;
-    
-    // Set up auth state listener
+
+    const initializeAuth = async () => {
+      try {
+        console.log('Initializing auth...');
+        
+        // First, get the current session
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+        }
+        
+        if (!mounted) return;
+
+        console.log('Initial session:', currentSession?.user?.email || 'No session');
+        
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        if (currentSession?.user) {
+          await fetchProfile(currentSession.user.id);
+        }
+        
+        setIsLoading(false);
+        setInitialized(true);
+        
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        if (mounted) {
+          setIsLoading(false);
+          setInitialized(true);
+        }
+      }
+    };
+
+    // Set up the auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
         
-        console.log('Auth state changed:', event, session?.user?.email);
+        console.log('Auth state changed:', event, session?.user?.email || 'No user');
+        
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          await fetchProfile(session.user.id);
+          // Use setTimeout to avoid potential deadlocks
+          setTimeout(() => {
+            if (mounted) {
+              fetchProfile(session.user.id);
+            }
+          }, 0);
         } else {
           setProfile(null);
         }
         
-        setIsLoading(false);
+        if (initialized) {
+          setIsLoading(false);
+        }
       }
     );
 
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      
-      console.log('Initial session check:', session?.user?.email);
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setIsLoading(false);
-      }
-    });
+    // Initialize auth
+    initializeAuth();
 
     return () => {
       mounted = false;
@@ -154,11 +183,23 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        console.error('Login error:', error);
+        return { error };
+      }
+      
+      console.log('Login successful for:', email);
+      return { error: null };
+    } catch (error) {
+      console.error('Login exception:', error);
+      return { error };
+    }
   };
 
   const signup = async (email: string, password: string, username: string) => {
@@ -187,7 +228,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Logout error:', error);
+      } else {
+        console.log('Logout successful');
+        // Clear state immediately
+        setUser(null);
+        setSession(null);
+        setProfile(null);
+      }
+    } catch (error) {
+      console.error('Logout exception:', error);
+    }
   };
 
   const value: AuthContextType = {
