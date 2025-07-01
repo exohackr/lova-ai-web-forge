@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Crown, Sparkles } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +12,11 @@ import { SystemManagement } from "./admin/SystemManagement";
 import { BanManagement } from "./admin/BanManagement";
 import { IpBlacklistManagement } from "./admin/IpBlacklistManagement";
 import { UserList } from "./admin/UserList";
+import { AdvancedUserManagement } from "./admin/AdvancedUserManagement";
+import { AnalyticsDashboard } from "./admin/AnalyticsDashboard";
+import { UserSearchFilter } from "./admin/UserSearchFilter";
+import { ContentModeration } from "./admin/ContentModeration";
+import { SystemLogs } from "./admin/SystemLogs";
 import { UserProfile } from "./admin/types";
 
 export const AdminPanel = () => {
@@ -60,18 +66,61 @@ export const AdminPanel = () => {
         </Badge>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <SelfManagement />
-        <UserManagement onUserUpdate={fetchUsers} />
-        <SystemManagement />
-      </div>
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 lg:grid-cols-8">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="advanced">Advanced</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="moderation">Moderation</TabsTrigger>
+          <TabsTrigger value="search">Search</TabsTrigger>
+          <TabsTrigger value="logs">Logs</TabsTrigger>
+          <TabsTrigger value="system">System</TabsTrigger>
+        </TabsList>
 
-      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <BanManagement onUserUpdate={fetchUsers} />
-        <IpBlacklistManagement />
-      </div>
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <SelfManagement />
+            <UserManagement onUserUpdate={fetchUsers} />
+            <SystemManagement />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <BanManagement onUserUpdate={fetchUsers} />
+            <IpBlacklistManagement />
+          </div>
+        </TabsContent>
 
-      <UserList users={users} />
+        <TabsContent value="users">
+          <UserList users={users} />
+        </TabsContent>
+
+        <TabsContent value="advanced">
+          <AdvancedUserManagement onUserUpdate={fetchUsers} />
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <AnalyticsDashboard />
+        </TabsContent>
+
+        <TabsContent value="moderation">
+          <ContentModeration />
+        </TabsContent>
+
+        <TabsContent value="search">
+          <UserSearchFilter users={users} onUserUpdate={fetchUsers} />
+        </TabsContent>
+
+        <TabsContent value="logs">
+          <SystemLogs />
+        </TabsContent>
+
+        <TabsContent value="system">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <SystemManagement />
+            <IpBlacklistManagement />
+          </div>
+        </TabsContent>
+      </Tabs>
     </Card>
   );
 };
