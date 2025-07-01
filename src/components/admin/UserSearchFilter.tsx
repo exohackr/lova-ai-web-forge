@@ -1,4 +1,3 @@
-
 import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,10 +34,11 @@ export const UserSearchFilter = ({ users, onUserUpdate }: UserSearchFilterProps)
         (roleFilter === "moderator" && user.is_moderator) ||
         (roleFilter === "user" && !user.is_admin && !user.is_moderator);
       
+      const hasUnlimitedUses = user.daily_uses_remaining === 999999;
       const matchesStatus = statusFilter === "all" ||
         (statusFilter === "banned" && user.is_banned) ||
         (statusFilter === "active" && !user.is_banned) ||
-        (statusFilter === "unlimited" && user.has_unlimited_uses);
+        (statusFilter === "unlimited" && hasUnlimitedUses);
 
       return matchesSearch && matchesRole && matchesStatus;
     });
@@ -146,10 +146,11 @@ export const UserSearchFilter = ({ users, onUserUpdate }: UserSearchFilterProps)
 
   const exportUsers = () => {
     const csvContent = "data:text/csv;charset=utf-8," + 
-      "Username,ID,Email,Total Uses,Daily Uses Remaining,Is Admin,Is Moderator,Is Banned,Has Unlimited Uses,Tag,Tag Color\n" +
-      filteredUsers.map(user => 
-        `"${user.username || ''}","${user.id}","${user.email || ''}","${user.total_uses}","${user.daily_uses_remaining}","${user.is_admin}","${user.is_moderator}","${user.is_banned}","${user.has_unlimited_uses}","${user.tag || ''}","${user.tag_color || ''}"`
-      ).join("\n");
+      "Username,ID,Total Uses,Daily Uses Remaining,Is Admin,Is Moderator,Is Banned,Has Unlimited Uses\n" +
+      filteredUsers.map(user => {
+        const hasUnlimitedUses = user.daily_uses_remaining === 999999;
+        return `"${user.username || ''}","${user.id}","${user.total_uses}","${user.daily_uses_remaining}","${user.is_admin}","${user.is_moderator}","${user.is_banned}","${hasUnlimitedUses}"`;
+      }).join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -276,57 +277,61 @@ export const UserSearchFilter = ({ users, onUserUpdate }: UserSearchFilterProps)
                 <TableHead>Role</TableHead>
                 <TableHead>Uses</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Tag</TableHead>
+                <TableHead>Tags</TableHead>
                 <TableHead>Total Uses</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedUsers.includes(user.id)}
-                      onCheckedChange={(checked) => handleUserSelect(user.id, checked as boolean)}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center space-x-2">
-                      <span>{user.username || 'Unknown'}</span>
-                      {user.has_unlimited_uses && (
-                        <Crown className="w-3 h-3 text-yellow-600" />
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getRoleColor(user) as any}>
-                      {getUserRole(user)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {user.has_unlimited_uses ? (
-                      <Badge variant="secondary">Unlimited</Badge>
-                    ) : (
-                      <span>{user.daily_uses_remaining}/5</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={user.is_banned ? "destructive" : "default"}>
-                      {user.is_banned ? "Banned" : "Active"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {user.tag && (
-                      <Badge 
-                        variant="outline" 
-                        style={{ backgroundColor: user.tag_color || '#gray', color: 'white' }}
-                      >
-                        {user.tag}
+              {filteredUsers.map((user) => {
+                const hasUnlimitedUses = user.daily_uses_remaining === 999999;
+                return (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedUsers.includes(user.id)}
+                        onCheckedChange={(checked) => handleUserSelect(user.id, checked as boolean)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center space-x-2">
+                        <span>{user.username || 'Unknown'}</span>
+                        {hasUnlimitedUses && (
+                          <Crown className="w-3 h-3 text-yellow-600" />
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getRoleColor(user) as any}>
+                        {getUserRole(user)}
                       </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>{user.total_uses}</TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell>
+                      {hasUnlimitedUses ? (
+                        <Badge variant="secondary">Unlimited</Badge>
+                      ) : (
+                        <span>{user.daily_uses_remaining}/5</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={user.is_banned ? "destructive" : "default"}>
+                        {user.is_banned ? "Banned" : "Active"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {user.tags && user.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {user.tags.map((tag, index) => (
+                            <Badge key={index} variant="outline" className="text-xs">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>{user.total_uses}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>

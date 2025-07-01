@@ -16,4 +16,8 @@ export interface UserProfile {
   profile_picture: string | null;
   custom_color: string | null;
   tags: string[] | null;
+  email?: string;
+  has_unlimited_uses?: boolean;
+  tag?: string;
+  tag_color?: string;
 }

@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +14,7 @@ interface AdvancedUserManagementProps {
 }
 
 export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementProps) => {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [addUsesUsername, setAddUsesUsername] = useState("");
   const [addUsesAmount, setAddUsesAmount] = useState("");
@@ -23,7 +22,14 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
   const [removeUsesAmount, setRemoveUsesAmount] = useState("");
   const [unlimitedUsername, setUnlimitedUsername] = useState("");
   const [removeUnlimitedUsername, setRemoveUnlimitedUsername] = useState("");
-  const [isUnlimitedEnabled, setIsUnlimitedEnabled] = useState(profile?.daily_uses_remaining === 999999);
+  const [isUnlimitedEnabled, setIsUnlimitedEnabled] = useState(false);
+
+  // Update the unlimited status when profile changes
+  useEffect(() => {
+    if (profile) {
+      setIsUnlimitedEnabled(profile.daily_uses_remaining === 999999);
+    }
+  }, [profile]);
 
   const addUsesToUser = async () => {
     if (!addUsesUsername || !addUsesAmount) return;
@@ -127,7 +133,12 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
 
       if (error) throw error;
 
+      // Update local state immediately
       setIsUnlimitedEnabled(!isUnlimitedEnabled);
+      
+      // Refresh the profile to get updated data
+      await refreshProfile();
+      
       toast({
         title: "Success",
         description: `Unlimited uses ${!isUnlimitedEnabled ? 'enabled' : 'disabled'}`,
