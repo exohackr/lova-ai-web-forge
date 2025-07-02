@@ -73,16 +73,26 @@ export const SiteGenerator = () => {
       console.log('Starting generation for user:', profile.username, 'Uses remaining:', profile.daily_uses_remaining);
       
       const { data, error } = await supabase.functions.invoke('secure-ai', {
-        body: { prompt: `Create a complete HTML website based on this description: ${prompt}. Include CSS styling, make it responsive and modern looking. Return only the HTML code with embedded CSS.` }
+        body: { 
+          prompt: `Create a complete HTML website based on this description: ${prompt}. Include CSS styling, make it responsive and modern looking. Return only the HTML code with embedded CSS.` 
+        }
       });
+
+      console.log('AI Response:', data, 'Error:', error);
 
       if (error) {
         console.error('Generation error:', error);
-        throw error;
+        throw new Error(error.message || 'Failed to generate website');
       }
 
       if (data && data.candidates && data.candidates[0] && data.candidates[0].content) {
         const generatedContent = data.candidates[0].content.parts[0].text;
+        console.log('Generated content length:', generatedContent?.length);
+        
+        if (!generatedContent) {
+          throw new Error('No content generated from AI service');
+        }
+        
         setGeneratedSite(generatedContent);
         
         // Refresh profile to get updated usage count
@@ -95,19 +105,22 @@ export const SiteGenerator = () => {
         
         console.log('Generation completed successfully');
       } else {
+        console.error('Invalid response format:', data);
         throw new Error('Invalid response format from AI service');
       }
     } catch (error: any) {
       console.error('Generation failed:', error);
       
-      let errorMessage = "Failed to generate website";
+      let errorMessage = "Failed to generate website. Please try again.";
       
       if (error.message?.includes('Daily usage limit exceeded')) {
         errorMessage = "You have no daily uses left. Please upgrade or wait for reset.";
       } else if (error.message?.includes('User is banned')) {
         errorMessage = "Your account has been banned";
       } else if (error.message?.includes('API key not configured')) {
-        errorMessage = "AI service is temporarily unavailable";
+        errorMessage = "AI service is temporarily unavailable. Please try again later.";
+      } else if (error.message) {
+        errorMessage = error.message;
       }
       
       toast({

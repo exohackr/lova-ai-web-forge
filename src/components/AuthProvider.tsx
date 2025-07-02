@@ -78,7 +78,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
-      setProfile(data);
+      // Fix the registration_ip type issue
+      const profileData: UserProfile = {
+        ...data,
+        registration_ip: data.registration_ip ? String(data.registration_ip) : null
+      };
+
+      setProfile(profileData);
     } catch (error) {
       console.error('Error refreshing profile:', error);
     }
@@ -123,7 +129,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         options: {
           data: {
             username,
-            ip: userIP // This will be captured by the handle_new_user function
+            ip: userIP
           }
         }
       });

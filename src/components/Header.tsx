@@ -13,7 +13,7 @@ export const Header = () => {
   const [showLeaderboard, setShowLeaderboard] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [siteSettings, setSiteSettings] = useState({ site_name: "Lova AI", site_icon: "" });
-  const { user, profile, logout } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -181,7 +181,7 @@ export const Header = () => {
                     </Button>
                   )}
                   
-                  <Button variant="ghost" size="sm" onClick={logout}>
+                  <Button variant="ghost" size="sm" onClick={signOut}>
                     Logout
                   </Button>
                 </div>

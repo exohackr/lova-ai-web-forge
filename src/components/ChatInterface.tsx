@@ -75,7 +75,7 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
         title: "Success!",
         description: `Generated response! ${profile.daily_uses_remaining - 1} uses remaining today.`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
       toast({
         title: "Error",

@@ -16,7 +16,7 @@ const Auth = () => {
   const [signupData, setSignupData] = useState({ email: "", password: "", username: "" });
   const [isVisible, setIsVisible] = useState(false);
   const [pageLoaded, setPageLoaded] = useState(false);
-  const { login, signup, user, isLoading: authLoading } = useAuth();
+  const { signIn, signUp, user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -42,25 +42,13 @@ const Auth = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await login(loginData.email, loginData.password);
-      if (error) {
-        toast({
-          title: "Login failed",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Welcome back!",
-          description: "You've been successfully logged in.",
-        });
-      }
-    } catch (error) {
+      await signIn(loginData.email, loginData.password);
       toast({
-        title: "Error",
-        description: "An error occurred during login. Please try again.",
-        variant: "destructive",
+        title: "Welcome back!",
+        description: "You've been successfully logged in.",
       });
+    } catch (error: any) {
+      // Error handling is already done in the signIn method
     } finally {
       setIsLoading(false);
     }
@@ -71,25 +59,9 @@ const Auth = () => {
     setIsLoading(true);
 
     try {
-      const { error } = await signup(signupData.email, signupData.password, signupData.username);
-      if (error) {
-        toast({
-          title: "Signup failed",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Account created!",
-          description: "Please check your email to verify your account.",
-        });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "An error occurred during signup. Please try again.",
-        variant: "destructive",
-      });
+      await signUp(signupData.email, signupData.password, signupData.username);
+    } catch (error: any) {
+      // Error handling is already done in the signUp method
     } finally {
       setIsLoading(false);
     }
