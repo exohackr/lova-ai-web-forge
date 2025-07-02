@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,12 +28,21 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
   // Update the unlimited status when profile changes
   useEffect(() => {
     if (profile) {
-      setIsUnlimitedEnabled(profile.daily_uses_remaining === 999999);
+      const hasUnlimited = profile.daily_uses_remaining === 999999;
+      console.log('Profile updated:', profile.daily_uses_remaining, 'hasUnlimited:', hasUnlimited);
+      setIsUnlimitedEnabled(hasUnlimited);
     }
   }, [profile]);
 
   const addUsesToUser = async () => {
-    if (!addUsesUsername || !addUsesAmount) return;
+    if (!addUsesUsername || !addUsesAmount) {
+      toast({
+        title: "Error",
+        description: "Please enter username and amount",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const { data: targetUser, error: fetchError } = await supabase
@@ -68,6 +78,7 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
       setAddUsesAmount("");
       onUserUpdate();
     } catch (error) {
+      console.error('Error adding uses:', error);
       toast({
         title: "Error",
         description: "Failed to add uses",
@@ -77,7 +88,14 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
   };
 
   const removeUsesFromUser = async () => {
-    if (!removeUsesUsername || !removeUsesAmount) return;
+    if (!removeUsesUsername || !removeUsesAmount) {
+      toast({
+        title: "Error",
+        description: "Please enter username and amount",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const { data: targetUser, error: fetchError } = await supabase
@@ -113,6 +131,7 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
       setRemoveUsesAmount("");
       onUserUpdate();
     } catch (error) {
+      console.error('Error removing uses:', error);
       toast({
         title: "Error",
         description: "Failed to remove uses",
@@ -126,16 +145,18 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
 
     try {
       const newAmount = isUnlimitedEnabled ? 5 : 999999;
+      console.log('Toggling unlimited uses. Current:', profile.daily_uses_remaining, 'New:', newAmount);
+      
       const { error } = await supabase
         .from('profiles')
         .update({ daily_uses_remaining: newAmount })
         .eq('id', profile.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating profile:', error);
+        throw error;
+      }
 
-      // Update local state immediately
-      setIsUnlimitedEnabled(!isUnlimitedEnabled);
-      
       // Refresh the profile to get updated data
       await refreshProfile();
       
@@ -145,6 +166,7 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
       });
       onUserUpdate();
     } catch (error) {
+      console.error('Error toggling unlimited uses:', error);
       toast({
         title: "Error",
         description: "Failed to toggle unlimited uses",
@@ -154,9 +176,31 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
   };
 
   const giveUnlimitedUses = async () => {
-    if (!unlimitedUsername) return;
+    if (!unlimitedUsername) {
+      toast({
+        title: "Error",
+        description: "Please enter a username",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
+      const { data: targetUser, error: fetchError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', unlimitedUsername)
+        .single();
+
+      if (fetchError || !targetUser) {
+        toast({
+          title: "Error",
+          description: "User not found",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({ daily_uses_remaining: 999999 })
@@ -171,6 +215,7 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
       setUnlimitedUsername("");
       onUserUpdate();
     } catch (error) {
+      console.error('Error giving unlimited uses:', error);
       toast({
         title: "Error",
         description: "Failed to give unlimited uses",
@@ -180,9 +225,31 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
   };
 
   const removeUnlimitedUses = async () => {
-    if (!removeUnlimitedUsername) return;
+    if (!removeUnlimitedUsername) {
+      toast({
+        title: "Error",
+        description: "Please enter a username",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
+      const { data: targetUser, error: fetchError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', removeUnlimitedUsername)
+        .single();
+
+      if (fetchError || !targetUser) {
+        toast({
+          title: "Error",
+          description: "User not found",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({ daily_uses_remaining: 5 })
@@ -197,6 +264,7 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
       setRemoveUnlimitedUsername("");
       onUserUpdate();
     } catch (error) {
+      console.error('Error removing unlimited uses:', error);
       toast({
         title: "Error",
         description: "Failed to remove unlimited uses",
@@ -265,6 +333,9 @@ export const AdvancedUserManagement = ({ onUserUpdate }: AdvancedUserManagementP
             <Infinity className="w-3 h-3 mr-1" />
             {isUnlimitedEnabled ? 'Active' : 'Inactive'}
           </Badge>
+        </div>
+        <div className="text-xs text-gray-600">
+          Current uses: {profile?.daily_uses_remaining || 0}
         </div>
       </div>
 

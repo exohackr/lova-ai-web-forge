@@ -1,149 +1,118 @@
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Loader2, Wand2, Lock, Eye, Code, Download } from "lucide-react";
-import { ChatInterface } from "@/components/ChatInterface";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Wand2, Globe, Code, Download, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 export const SiteGenerator = () => {
-  const [description, setDescription] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedHtml, setGeneratedHtml] = useState("");
-  const [showChat, setShowChat] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showCode, setShowCode] = useState(false);
   const { user, profile, refreshProfile } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const [prompt, setPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedSite, setGeneratedSite] = useState("");
+  const [showPreview, setShowPreview] = useState(true);
+  const [showCode, setShowCode] = useState(false);
 
-  const trackUsage = async () => {
-    if (!user || !profile) return false;
-
-    // Check if user has uses remaining (diddy has unlimited)
-    if (profile.username !== 'diddy' && profile.daily_uses_remaining <= 0) {
-      toast({
-        title: "No uses remaining",
-        description: "You've used all your daily credits. More will be available tomorrow!",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    try {
-      // Log the usage
-      const { error: logError } = await supabase
-        .from('usage_logs')
-        .insert([{ user_id: user.id }]);
-
-      if (logError) {
-        console.error('Error logging usage:', logError);
-        return false;
-      }
-
-      // Update user's remaining uses and total uses (unless they're diddy)
-      if (profile.username !== 'diddy') {
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ 
-            daily_uses_remaining: profile.daily_uses_remaining - 1,
-            total_uses: profile.total_uses + 1
-          })
-          .eq('id', user.id);
-
-        if (updateError) {
-          console.error('Error updating profile:', updateError);
-          return false;
-        }
-      } else {
-        // For diddy, just update total uses
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ 
-            total_uses: profile.total_uses + 1
-          })
-          .eq('id', user.id);
-
-        if (updateError) {
-          console.error('Error updating profile:', updateError);
-          return false;
-        }
-      }
-
-      await refreshProfile();
-      return true;
-    } catch (error) {
-      console.error('Error tracking usage:', error);
-      return false;
-    }
-  };
-
-  const generateSite = async () => {
+  const handleGenerate = async () => {
     if (!user) {
-      navigate("/auth");
-      return;
-    }
-
-    if (!description.trim()) {
       toast({
-        title: "Description required",
-        description: "Please describe the website you want to generate.",
+        title: "Authentication Required",
+        description: "Please log in to generate websites",
         variant: "destructive",
       });
       return;
     }
 
-    const canProceed = await trackUsage();
-    if (!canProceed) return;
+    if (!profile) {
+      toast({
+        title: "Profile Error",
+        description: "Unable to load user profile",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (profile.is_banned) {
+      toast({
+        title: "Access Denied",
+        description: "Your account has been banned",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if user has uses remaining (unless they have unlimited uses)
+    if (profile.daily_uses_remaining <= 0 && profile.daily_uses_remaining !== 999999) {
+      toast({
+        title: "No Uses Remaining",
+        description: "You have no daily uses left. Please upgrade or wait for reset.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!prompt.trim()) {
+      toast({
+        title: "Missing Prompt",
+        description: "Please enter a description for your website",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsGenerating(true);
-    
+
     try {
-      const prompt = `Generate a complete, modern, and fully responsive HTML document for a website based on the following description.
-      The HTML should be well-structured, include a <head> section with appropriate meta tags for responsiveness and title, and a <body> section.
-      Use Tailwind CSS classes exclusively for all styling. Do not include any <style> tags or inline CSS.
-      Make sure to include the Tailwind CSS CDN link in the head section.
-      Ensure good visual design, layout, and user experience. Include dummy content where appropriate.
-      Description: ${description}`;
-
-      const apiKey = "AIzaSyDY7qMaXLfpEPUJmyyzF5tLpKVtSIt0fUg";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }]
-        })
+      console.log('Starting generation for user:', profile.username, 'Uses remaining:', profile.daily_uses_remaining);
+      
+      const { data, error } = await supabase.functions.invoke('secure-ai', {
+        body: { prompt: `Create a complete HTML website based on this description: ${prompt}. Include CSS styling, make it responsive and modern looking. Return only the HTML code with embedded CSS.` }
       });
 
-      const result = await response.json();
+      if (error) {
+        console.error('Generation error:', error);
+        throw error;
+      }
 
-      if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
-        const generatedText = result.candidates[0].content.parts[0].text;
-        const htmlMatch = generatedText.match(/```html\n(.*?)```/s);
-        const htmlContent = htmlMatch ? htmlMatch[1] : generatedText;
+      if (data && data.candidates && data.candidates[0] && data.candidates[0].content) {
+        const generatedContent = data.candidates[0].content.parts[0].text;
+        setGeneratedSite(generatedContent);
         
-        setGeneratedHtml(htmlContent);
-        setShowChat(true);
-        setShowPreview(true);
+        // Refresh profile to get updated usage count
+        await refreshProfile();
         
         toast({
-          title: "Site generated!",
-          description: "Your website has been created successfully. You can now preview, view code, or download it.",
+          title: "Website Generated!",
+          description: "Your website has been generated successfully",
         });
+        
+        console.log('Generation completed successfully');
       } else {
-        throw new Error("No content generated");
+        throw new Error('Invalid response format from AI service');
       }
-    } catch (error) {
-      console.error("Error generating site:", error);
+    } catch (error: any) {
+      console.error('Generation failed:', error);
+      
+      let errorMessage = "Failed to generate website";
+      
+      if (error.message?.includes('Daily usage limit exceeded')) {
+        errorMessage = "You have no daily uses left. Please upgrade or wait for reset.";
+      } else if (error.message?.includes('User is banned')) {
+        errorMessage = "Your account has been banned";
+      } else if (error.message?.includes('API key not configured')) {
+        errorMessage = "AI service is temporarily unavailable";
+      }
+      
       toast({
-        title: "Generation failed",
-        description: "Failed to generate your website. Please try again.",
+        title: "Generation Failed",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -151,10 +120,10 @@ export const SiteGenerator = () => {
     }
   };
 
-  const downloadHtml = () => {
-    if (!generatedHtml) return;
-    
-    const blob = new Blob([generatedHtml], { type: 'text/html' });
+  const downloadHTML = () => {
+    if (!generatedSite) return;
+
+    const blob = new Blob([generatedSite], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -163,173 +132,153 @@ export const SiteGenerator = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    
+
     toast({
-      title: "Download started",
-      description: "Your website HTML file is being downloaded.",
+      title: "Download Started",
+      description: "Your HTML file is being downloaded",
     });
   };
 
-  const startOver = () => {
-    setGeneratedHtml("");
-    setShowChat(false);
-    setShowPreview(false);
-    setShowCode(false);
-    setDescription("");
+  const getRemainingUses = () => {
+    if (!profile) return 0;
+    if (profile.daily_uses_remaining === 999999) return "Unlimited";
+    return profile.daily_uses_remaining;
   };
 
-  if (!user) {
-    return (
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-        <Card className="p-8 bg-white/80 backdrop-blur-xl border-white/20 shadow-xl">
-          <div className="text-center space-y-6">
-            <Lock className="w-16 h-16 mx-auto text-gray-400" />
-            <h2 className="text-2xl font-bold text-gray-900">Authentication Required</h2>
-            <p className="text-gray-600">Please sign in to start generating websites with AI</p>
-            <Button
-              onClick={() => navigate("/auth")}
-              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
-            >
-              Sign In to Continue
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-      {!showChat ? (
-        <Card className="p-8 bg-white/80 backdrop-blur-xl border-white/20 shadow-xl">
-          <div className="space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Describe Your Dream Website</h2>
-              <p className="text-gray-600">Tell us what you want to build, and we'll create it for you</p>
-              {profile && (
-                <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg">
-                  <p className="text-sm text-gray-700">
-                    {profile.username === 'diddy' ? (
-                      <span className="text-yellow-600 font-semibold">👑 Unlimited uses available</span>
-                    ) : (
-                      <>You have <span className="font-semibold text-purple-600">{profile.daily_uses_remaining}</span> uses remaining today</>
-                    )}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <Textarea
-              placeholder="e.g., A modern e-commerce site selling handmade jewelry with a clean product grid, hero section, and contact form..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="min-h-32 text-lg resize-none border-gray-200 focus:border-purple-500 focus:ring-purple-500"
-            />
-
-            <Button
-              onClick={generateSite}
-              disabled={isGenerating || !description.trim() || (profile && profile.username !== 'diddy' && profile.daily_uses_remaining <= 0)}
-              className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Generating your site...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="w-5 h-5 mr-2" />
-                  Generate Website
-                </>
-              )}
-            </Button>
+    <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <div className="text-center space-y-4">
+        <div className="flex items-center justify-center space-x-2">
+          <Wand2 className="w-8 h-8 text-purple-600" />
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+            AI Website Generator
+          </h1>
+        </div>
+        <p className="text-gray-600 text-lg">
+          Describe your dream website and watch AI bring it to life
+        </p>
+        
+        {user && (
+          <div className="flex justify-center items-center space-x-4">
+            <Badge variant="secondary" className="text-sm">
+              Uses Remaining: {getRemainingUses()}
+            </Badge>
+            {profile?.has_subscription && (
+              <Badge variant="default" className="text-sm">
+                {profile.subscription_type?.toUpperCase()} Member
+              </Badge>
+            )}
           </div>
-        </Card>
-      ) : (
-        <div className="space-y-6">
-          {/* Generated Site Controls */}
-          <Card className="p-6 bg-white/80 backdrop-blur-xl border-white/20 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Your Generated Website</h3>
-              <div className="flex gap-2">
-                <Button
-                  variant={showPreview ? "default" : "outline"}
-                  onClick={() => { setShowPreview(true); setShowCode(false); }}
-                  className="flex items-center gap-2"
-                >
-                  <Eye className="w-4 h-4" />
-                  Preview
-                </Button>
-                <Button
-                  variant={showCode ? "default" : "outline"}
-                  onClick={() => { setShowCode(true); setShowPreview(false); }}
-                  className="flex items-center gap-2"
-                >
-                  <Code className="w-4 h-4" />
-                  View Code
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={downloadHtml}
-                  className="flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Download HTML
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={startOver}
-                >
-                  Start Over
-                </Button>
-              </div>
-            </div>
+        )}
+      </div>
 
-            {/* Website Preview */}
-            {showPreview && generatedHtml && (
-              <div className="border rounded-lg overflow-hidden bg-white">
-                <div className="bg-gray-100 px-4 py-2 text-sm text-gray-600 border-b">
-                  Website Preview
-                </div>
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Website Description
+            </label>
+            <Textarea
+              placeholder="Describe the website you want to create (e.g., 'A modern portfolio website for a photographer with a dark theme and gallery section')"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              rows={4}
+              className="w-full"
+            />
+          </div>
+
+          <Button
+            onClick={handleGenerate}
+            disabled={isGenerating || !user}
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+            size="lg"
+          >
+            {isGenerating ? (
+              <>
+                <Wand2 className="w-4 h-4 mr-2 animate-spin" />
+                Generating Your Website...
+              </>
+            ) : (
+              <>
+                <Wand2 className="w-4 h-4 mr-2" />
+                Generate Website
+              </>
+            )}
+          </Button>
+
+          {!user && (
+            <p className="text-sm text-gray-500 text-center">
+              Please log in to generate websites
+            </p>
+          )}
+        </div>
+      </Card>
+
+      {generatedSite && (
+        <Card className="p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-800">Generated Website</h2>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPreview(!showPreview)}
+              >
+                {showPreview ? <EyeOff className="w-4 h-4 mr-1" /> : <Eye className="w-4 h-4 mr-1" />}
+                {showPreview ? 'Hide' : 'Show'} Preview
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCode(!showCode)}
+              >
+                <Code className="w-4 h-4 mr-1" />
+                {showCode ? 'Hide' : 'Show'} Code
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={downloadHTML}
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Download HTML
+              </Button>
+            </div>
+          </div>
+
+          <Separator />
+
+          {showPreview && (
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold flex items-center">
+                <Globe className="w-5 h-5 mr-2" />
+                Live Preview
+              </h3>
+              <div className="border rounded-lg overflow-hidden" style={{ height: '500px' }}>
                 <iframe
-                  srcDoc={generatedHtml}
-                  className="w-full h-96 border-0"
+                  srcDoc={generatedSite}
+                  className="w-full h-full"
                   title="Generated Website Preview"
                   sandbox="allow-scripts allow-same-origin"
                 />
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Code View */}
-            {showCode && generatedHtml && (
-              <div className="border rounded-lg overflow-hidden bg-white">
-                <div className="bg-gray-100 px-4 py-2 text-sm text-gray-600 border-b flex justify-between items-center">
-                  HTML Source Code
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(generatedHtml);
-                      toast({ title: "Copied!", description: "HTML code copied to clipboard" });
-                    }}
-                  >
-                    Copy Code
-                  </Button>
-                </div>
-                <pre className="p-4 text-sm overflow-auto max-h-96 bg-gray-50">
-                  <code>{generatedHtml}</code>
+          {showCode && (
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold flex items-center">
+                <Code className="w-5 h-5 mr-2" />
+                HTML Source Code
+              </h3>
+              <div className="bg-gray-900 text-green-400 p-4 rounded-lg overflow-auto max-h-96">
+                <pre className="text-sm">
+                  <code>{generatedSite}</code>
                 </pre>
               </div>
-            )}
-          </Card>
-
-          {/* Chat Interface */}
-          <ChatInterface 
-            onResponse={(response) => {
-              console.log("AI Response:", response);
-            }}
-          />
-        </div>
+            </div>
+          )}
+        </Card>
       )}
     </div>
   );

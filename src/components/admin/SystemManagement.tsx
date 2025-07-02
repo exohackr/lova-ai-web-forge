@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -83,10 +82,13 @@ export const SystemManagement = () => {
           updated_by: profile?.id
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error updating setting:', error);
+        throw error;
+      }
       return true;
     } catch (error) {
-      console.error('Error updating setting:', error);
+      console.error('Error in updateSystemSetting:', error);
       return false;
     }
   };
@@ -134,16 +136,27 @@ export const SystemManagement = () => {
   };
 
   const updateAiPrompt = async () => {
-    const confirmed = confirm("Are you sure you want to update the AI prompt?");
+    if (!aiPrompt.trim()) {
+      toast({
+        title: "Error",
+        description: "AI prompt cannot be empty",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const confirmed = window.confirm("Are you sure you want to update the AI prompt?");
     if (!confirmed) return;
 
+    console.log('Updating AI prompt to:', aiPrompt);
+    
     const success = await updateSystemSetting('ai_prompt', aiPrompt);
     
     if (success) {
       setOriginalPrompt(aiPrompt);
       toast({
         title: "Success",
-        description: "AI prompt updated",
+        description: "AI prompt updated successfully",
       });
     } else {
       toast({
@@ -332,7 +345,7 @@ export const SystemManagement = () => {
       <div className="space-y-2">
         <Label>AI Prompt Management</Label>
         <div className="text-xs text-gray-600 mb-2">
-          <strong>Original:</strong> {originalPrompt.substring(0, 100)}...
+          <strong>Current:</strong> {originalPrompt ? originalPrompt.substring(0, 100) + '...' : 'No prompt set'}
         </div>
         <Textarea
           placeholder="AI Generation Prompt"
