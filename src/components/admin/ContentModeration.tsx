@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { Shield, AlertTriangle, Ban, Eye, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,42 +34,97 @@ export const ContentModeration = () => {
   const [suspiciousActivities, setSuspiciousActivities] = useState<SuspiciousActivity[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const generateMockData = () => {
-    const mockBannedWords: BannedWord[] = [
-      { id: '1', word: 'spam', severity: 'high', created_at: new Date().toISOString() },
-      { id: '2', word: 'scam', severity: 'high', created_at: new Date().toISOString() },
-      { id: '3', word: 'fake', severity: 'medium', created_at: new Date().toISOString() },
-      { id: '4', word: 'bot', severity: 'low', created_at: new Date().toISOString() },
-    ];
+  const fetchBannedWords = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('setting_value')
+        .eq('setting_name', 'banned_words')
+        .single();
 
-    const mockActivities: SuspiciousActivity[] = [
-      {
-        id: '1',
-        user_id: 'user1',
-        username: 'testuser1',
-        activity_type: 'Rapid API calls',
-        details: 'Made 50 API calls in 1 minute',
-        timestamp: new Date().toISOString(),
-        status: 'pending'
-      },
-      {
-        id: '2',
-        user_id: 'user2',
-        username: 'testuser2',
-        activity_type: 'Suspicious content',
-        details: 'Generated content containing banned words',
-        timestamp: new Date().toISOString(),
-        status: 'pending'
-      },
-    ];
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching banned words:', error);
+        return;
+      }
 
-    setBannedWords(mockBannedWords);
-    setSuspiciousActivities(mockActivities);
+      if (data?.setting_value) {
+        const words = JSON.parse(data.setting_value) as BannedWord[];
+        setBannedWords(words);
+      }
+    } catch (error) {
+      console.error('Error parsing banned words:', error);
+    }
+  };
+
+  const fetchSuspiciousActivities = async () => {
+    try {
+      // Get users with high usage in short time periods
+      const { data: highUsageUsers, error } = await supabase
+        .from('usage_logs')
+        .select(`
+          user_id,
+          used_at,
+          profiles!inner(username)
+        `)
+        .gte('used_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order('used_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Group by user and count usage
+      const userUsage: { [key: string]: { count: number; username: string; lastUsed: string } } = {};
+      
+      highUsageUsers?.forEach(log => {
+        if (!userUsage[log.user_id]) {
+          userUsage[log.user_id] = {
+            count: 0,
+            username: (log.profiles as any)?.username || 'Unknown',
+            lastUsed: log.used_at || new Date().toISOString()
+          };
+        }
+        userUsage[log.user_id].count++;
+      });
+
+      // Create suspicious activities for users with high usage
+      const suspicious: SuspiciousActivity[] = Object.entries(userUsage)
+        .filter(([_, usage]) => usage.count >= 10)
+        .map(([userId, usage]) => ({
+          id: `suspicious-${userId}`,
+          user_id: userId,
+          username: usage.username,
+          activity_type: 'High API Usage',
+          details: `Made ${usage.count} API calls in the last 24 hours`,
+          timestamp: usage.lastUsed,
+          status: 'pending' as const
+        }));
+
+      setSuspiciousActivities(suspicious);
+    } catch (error) {
+      console.error('Error fetching suspicious activities:', error);
+    }
   };
 
   useEffect(() => {
-    generateMockData();
+    fetchBannedWords();
+    fetchSuspiciousActivities();
   }, []);
+
+  const saveBannedWords = async (words: BannedWord[]) => {
+    try {
+      const { error } = await supabase
+        .from('system_settings')
+        .upsert({
+          setting_name: 'banned_words',
+          setting_value: JSON.stringify(words)
+        });
+
+      if (error) throw error;
+      return true;
+    } catch (error) {
+      console.error('Error saving banned words:', error);
+      return false;
+    }
+  };
 
   const addBannedWord = async () => {
     if (!newWord.trim()) return;
@@ -82,22 +136,46 @@ export const ContentModeration = () => {
       created_at: new Date().toISOString()
     };
 
-    setBannedWords(prev => [...prev, newBannedWord]);
-    setNewWord("");
-
-    toast({
-      title: "Word Added",
-      description: `"${newWord}" has been added to the banned words list`,
-    });
+    const updatedWords = [...bannedWords, newBannedWord];
+    setBannedWords(updatedWords);
+    
+    const success = await saveBannedWords(updatedWords);
+    
+    if (success) {
+      setNewWord("");
+      toast({
+        title: "Word Added",
+        description: `"${newWord}" has been added to the banned words list`,
+      });
+    } else {
+      setBannedWords(bannedWords); // Revert on error
+      toast({
+        title: "Error",
+        description: "Failed to save banned word",
+        variant: "destructive",
+      });
+    }
   };
 
   const removeBannedWord = async (id: string) => {
-    setBannedWords(prev => prev.filter(word => word.id !== id));
+    const updatedWords = bannedWords.filter(word => word.id !== id);
+    setBannedWords(updatedWords);
     
-    toast({
-      title: "Word Removed",
-      description: "Word has been removed from the banned list",
-    });
+    const success = await saveBannedWords(updatedWords);
+    
+    if (success) {
+      toast({
+        title: "Word Removed",
+        description: "Word has been removed from the banned list",
+      });
+    } else {
+      setBannedWords(bannedWords); // Revert on error
+      toast({
+        title: "Error",
+        description: "Failed to remove banned word",
+        variant: "destructive",
+      });
+    }
   };
 
   const updateActivityStatus = async (id: string, status: 'reviewed' | 'dismissed') => {
@@ -115,12 +193,19 @@ export const ContentModeration = () => {
 
   const banUserFromActivity = async (userId: string, username: string) => {
     try {
-      // In a real implementation, this would ban the user
-      console.log(`Banning user ${username} (${userId})`);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          is_banned: true,
+          ban_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
       
       toast({
         title: "User Banned",
-        description: `User ${username} has been banned for suspicious activity`,
+        description: `User ${username} has been banned for 7 days`,
       });
     } catch (error) {
       toast({
@@ -185,23 +270,29 @@ export const ContentModeration = () => {
         </div>
 
         <div className="space-y-2 max-h-40 overflow-y-auto">
-          {bannedWords.map((word) => (
-            <div key={word.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-              <div className="flex items-center space-x-2">
-                <span className="font-mono">{word.word}</span>
-                <Badge variant={getSeverityColor(word.severity) as any}>
-                  {word.severity}
-                </Badge>
+          {bannedWords.length > 0 ? (
+            bannedWords.map((word) => (
+              <div key={word.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                <div className="flex items-center space-x-2">
+                  <span className="font-mono">{word.word}</span>
+                  <Badge variant={getSeverityColor(word.severity) as any}>
+                    {word.severity}
+                  </Badge>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => removeBannedWord(word.id)}
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => removeBannedWord(word.id)}
-              >
-                <Trash2 className="w-3 h-3" />
-              </Button>
+            ))
+          ) : (
+            <div className="text-center text-gray-500 py-4">
+              No banned words configured
             </div>
-          ))}
+          )}
         </div>
       </Card>
 
@@ -225,52 +316,60 @@ export const ContentModeration = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {suspiciousActivities.map((activity) => (
-                <TableRow key={activity.id}>
-                  <TableCell className="font-medium">{activity.username}</TableCell>
-                  <TableCell>{activity.activity_type}</TableCell>
-                  <TableCell className="max-w-xs truncate" title={activity.details}>
-                    {activity.details}
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-600">
-                    {new Date(activity.timestamp).toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusColor(activity.status) as any}>
-                      {activity.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      {activity.status === 'pending' && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateActivityStatus(activity.id, 'reviewed')}
-                          >
-                            Review
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateActivityStatus(activity.id, 'dismissed')}
-                          >
-                            Dismiss
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => banUserFromActivity(activity.user_id, activity.username)}
-                          >
-                            <Ban className="w-3 h-3" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
+              {suspiciousActivities.length > 0 ? (
+                suspiciousActivities.map((activity) => (
+                  <TableRow key={activity.id}>
+                    <TableCell className="font-medium">{activity.username}</TableCell>
+                    <TableCell>{activity.activity_type}</TableCell>
+                    <TableCell className="max-w-xs truncate" title={activity.details}>
+                      {activity.details}
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600">
+                      {new Date(activity.timestamp).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusColor(activity.status) as any}>
+                        {activity.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {activity.status === 'pending' && (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateActivityStatus(activity.id, 'reviewed')}
+                            >
+                              Review
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateActivityStatus(activity.id, 'dismissed')}
+                            >
+                              Dismiss
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => banUserFromActivity(activity.user_id, activity.username)}
+                            >
+                              <Ban className="w-3 h-3" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-gray-500">
+                    No suspicious activities detected
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </div>

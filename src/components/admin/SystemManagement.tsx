@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -145,7 +146,7 @@ export const SystemManagement = () => {
       return;
     }
 
-    const confirmed = window.confirm("Are you sure you want to update the AI prompt?");
+    const confirmed = window.confirm("Are you sure you want to update the AI prompt? This will affect all future generations.");
     if (!confirmed) return;
 
     console.log('Updating AI prompt to:', aiPrompt);
@@ -168,6 +169,8 @@ export const SystemManagement = () => {
   };
 
   const updatePaypalLinks = async () => {
+    console.log('Updating PayPal links:', { paypalBasic, paypalPremium, paypalBusiness });
+    
     const updates = [
       updateSystemSetting('paypal_link_basic', paypalBasic),
       updateSystemSetting('paypal_link_premium', paypalPremium),
@@ -179,7 +182,7 @@ export const SystemManagement = () => {
     if (results.every(Boolean)) {
       toast({
         title: "Success",
-        description: "PayPal links updated",
+        description: "PayPal links updated successfully",
       });
     } else {
       toast({
@@ -191,15 +194,33 @@ export const SystemManagement = () => {
   };
 
   const createAnnouncement = async () => {
-    if (!announcementTitle || !announcementMessage) return;
+    if (!announcementTitle.trim() || !announcementMessage.trim()) {
+      toast({
+        title: "Error",
+        description: "Title and message are required",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       let expiresAt = null;
       if (announcementDuration && !announcementPersistent) {
         const duration = parseInt(announcementDuration);
-        expiresAt = new Date();
-        expiresAt.setHours(expiresAt.getHours() + duration);
+        if (duration > 0) {
+          expiresAt = new Date();
+          expiresAt.setHours(expiresAt.getHours() + duration);
+        }
       }
+
+      console.log('Creating announcement:', {
+        title: announcementTitle,
+        message: announcementMessage,
+        type: announcementType,
+        is_persistent: announcementPersistent,
+        expires_at: expiresAt?.toISOString(),
+        created_by: profile?.id
+      });
 
       const { error } = await supabase
         .from('announcements')
@@ -212,18 +233,24 @@ export const SystemManagement = () => {
           created_by: profile?.id
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating announcement:', error);
+        throw error;
+      }
 
       toast({
         title: "Success",
-        description: "Announcement created",
+        description: "Announcement created successfully",
       });
 
+      // Reset form
       setAnnouncementTitle("");
       setAnnouncementMessage("");
       setAnnouncementDuration("");
       setAnnouncementPersistent(false);
+      setAnnouncementType("info");
     } catch (error) {
+      console.error('Error creating announcement:', error);
       toast({
         title: "Error",
         description: "Failed to create announcement",
@@ -233,7 +260,14 @@ export const SystemManagement = () => {
   };
 
   const updateGeminiApiKey = async () => {
-    if (!geminiApiKey || geminiApiKey === '••••••••••••••••') return;
+    if (!geminiApiKey || geminiApiKey === '••••••••••••••••') {
+      toast({
+        title: "Error",
+        description: "Please enter a new API key",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -245,6 +279,7 @@ export const SystemManagement = () => {
         });
 
       if (error) {
+        console.error('Error updating API key:', error);
         toast({
           title: "Error",
           description: "Failed to update API key",
@@ -259,6 +294,7 @@ export const SystemManagement = () => {
       });
       setGeminiApiKey('••••••••••••••••');
     } catch (error) {
+      console.error('Error updating API key:', error);
       toast({
         title: "Error",
         description: "Failed to update API key",
@@ -268,9 +304,18 @@ export const SystemManagement = () => {
   };
 
   const lookupUserIp = async () => {
-    if (!ipLookupUsername) return;
+    if (!ipLookupUsername.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a username",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
+      console.log('Looking up IP for username:', ipLookupUsername);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('registration_ip')
@@ -278,22 +323,32 @@ export const SystemManagement = () => {
         .single();
 
       if (error || !data) {
+        console.error('User lookup error:', error);
         toast({
           title: "Error",
           description: "User not found",
           variant: "destructive",
         });
+        setFoundUserIp("");
         return;
       }
 
       const ipValue = data.registration_ip ? String(data.registration_ip) : "No IP recorded";
+      console.log('Found IP:', ipValue);
       setFoundUserIp(ipValue);
+      
+      toast({
+        title: "Success",
+        description: `IP found for user ${ipLookupUsername}`,
+      });
     } catch (error) {
+      console.error('Error looking up user IP:', error);
       toast({
         title: "Error",
         description: "Failed to lookup user IP",
         variant: "destructive",
       });
+      setFoundUserIp("");
     }
   };
 
@@ -368,7 +423,7 @@ export const SystemManagement = () => {
           onChange={(e) => setPaypalBasic(e.target.value)}
         />
         <Input
-          placeholder="Premium Plan PayPal Link"
+          placeholder="Premium Plan PayPal Link"  
           value={paypalPremium}
           onChange={(e) => setPaypalPremium(e.target.value)}
         />
@@ -460,9 +515,9 @@ export const SystemManagement = () => {
           </Button>
         </div>
         {foundUserIp && (
-          <p className="text-sm text-gray-600 bg-gray-100 p-2 rounded">
-            IP: {foundUserIp}
-          </p>
+          <div className="text-sm text-gray-600 bg-gray-100 p-2 rounded">
+            <strong>IP:</strong> {foundUserIp}
+          </div>
         )}
       </div>
     </div>

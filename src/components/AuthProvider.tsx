@@ -1,7 +1,8 @@
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { User, Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { createContext, useContext, useEffect, useState } from 'react';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface UserProfile {
   id: string;
@@ -9,27 +10,27 @@ interface UserProfile {
   display_style: string;
   daily_uses_remaining: number;
   total_uses: number;
-  is_admin?: boolean;
-  is_banned?: boolean;
-  ban_expires_at?: string | null;
-  is_moderator?: boolean;
-  has_subscription?: boolean;
-  subscription_type?: string | null;
-  subscription_expires_at?: string | null;
-  profile_picture?: string | null;
-  custom_color?: string | null;
-  tags?: string[] | null;
-  registration_ip?: string | null;
+  is_admin: boolean;
+  is_banned: boolean;
+  ban_expires_at: string | null;
+  registration_ip: string | null;
+  is_moderator: boolean;
+  has_subscription: boolean;
+  subscription_type: string | null;
+  subscription_expires_at: string | null;
+  profile_picture: string | null;
+  custom_color: string | null;
+  tags: string[] | null;
 }
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   profile: UserProfile | null;
-  login: (email: string, password: string) => Promise<{ error: any }>;
-  signup: (email: string, password: string, username: string) => Promise<{ error: any }>;
-  logout: () => void;
-  isLoading: boolean;
+  session: Session | null;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, username: string) => Promise<void>;
+  signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -38,38 +39,38 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    console.warn("useAuth called outside of AuthProvider, returning default state");
-    return {
-      user: null,
-      session: null,
-      profile: null,
-      login: async () => ({ error: new Error("Auth not initialized") }),
-      signup: async () => ({ error: new Error("Auth not initialized") }),
-      logout: () => {},
-      isLoading: true,
-      refreshProfile: async () => {}
-    };
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
+// Function to get user's IP address
+const getUserIP = async (): Promise<string | null> => {
+  try {
+    const response = await fetch('https://api.ipify.org?format=json');
+    const data = await response.json();
+    return data.ip;
+  } catch (error) {
+    console.error('Error getting user IP:', error);
+    return null;
+  }
+};
 
-export const AuthProvider = ({ children }: AuthProviderProps) => {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
-  const fetchProfile = async (userId: string) => {
+  const refreshProfile = async () => {
+    if (!user) return;
+
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', userId)
+        .eq('id', user.id)
         .single();
 
       if (error) {
@@ -77,187 +78,143 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         return;
       }
 
-      // Check if user is banned and if temp ban has expired
-      if (data.is_banned && data.ban_expires_at) {
-        const banExpiry = new Date(data.ban_expires_at);
-        if (banExpiry < new Date()) {
-          // Temp ban has expired, unban the user
-          await supabase
-            .from('profiles')
-            .update({ is_banned: false, ban_expires_at: null })
-            .eq('id', userId);
-          
-          data.is_banned = false;
-          data.ban_expires_at = null;
-        }
-      }
-
-      const typedProfile: UserProfile = {
-        ...data,
-        registration_ip: data.registration_ip ? String(data.registration_ip) : null
-      };
-
-      setProfile(typedProfile);
+      setProfile(data);
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('Error refreshing profile:', error);
     }
   };
 
-  const refreshProfile = async () => {
-    if (user) {
-      await fetchProfile(user.id);
+  const signIn = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      // Update user's IP address after successful login
+      const userIP = await getUserIP();
+      if (userIP && user) {
+        await supabase
+          .from('profiles')
+          .update({ registration_ip: userIP })
+          .eq('id', user.id);
+      }
+
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Sign in failed",
+        description: error.message,
+      });
+      throw error;
+    }
+  };
+
+  const signUp = async (email: string, password: string, username: string) => {
+    try {
+      // Get user's IP before signup
+      const userIP = await getUserIP();
+      
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username,
+            ip: userIP // This will be captured by the handle_new_user function
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Account created",
+        description: "Please check your email to verify your account.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Sign up failed",
+        description: error.message,
+      });
+      throw error;
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Sign out failed",
+        description: error.message,
+      });
     }
   };
 
   useEffect(() => {
-    let mounted = true;
-
-    const initializeAuth = async () => {
-      try {
-        console.log('Initializing auth...');
-        
-        // First, get the current session
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-        }
-        
-        if (!mounted) return;
-
-        console.log('Initial session:', currentSession?.user?.email || 'No session');
-        
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        
-        if (currentSession?.user) {
-          await fetchProfile(currentSession.user.id);
-        }
-        
-        setIsLoading(false);
-        setInitialized(true);
-        
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        if (mounted) {
-          setIsLoading(false);
-          setInitialized(true);
-        }
-      }
-    };
-
-    // Set up the auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted) return;
-        
-        console.log('Auth state changed:', event, session?.user?.email || 'No user');
-        
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          // Use setTimeout to avoid potential deadlocks
-          setTimeout(() => {
-            if (mounted) {
-              fetchProfile(session.user.id);
-            }
-          }, 0);
-        } else {
-          setProfile(null);
-        }
-        
-        if (initialized) {
-          setIsLoading(false);
-        }
-      }
-    );
-
-    // Initialize auth
-    initializeAuth();
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  const login = async (email: string, password: string) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      
-      if (error) {
-        console.error('Login error:', error);
-        return { error };
-      }
-      
-      console.log('Login successful for:', email);
-      return { error: null };
-    } catch (error) {
-      console.error('Login exception:', error);
-      return { error };
-    }
-  };
-
-  const signup = async (email: string, password: string, username: string) => {
-    // Get user's IP address for registration tracking
-    let userIP = null;
-    try {
-      const response = await fetch('https://api.ipify.org?format=json');
-      const data = await response.json();
-      userIP = data.ip;
-    } catch (error) {
-      console.error('Failed to get IP:', error);
-    }
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          username: username,
-          ip: userIP
-        },
-        emailRedirectTo: `${window.location.origin}/`
-      }
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
     });
-    return { error };
-  };
 
-  const logout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('Logout error:', error);
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.id);
+      
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        // Update IP on login
+        if (event === 'SIGNED_IN') {
+          const userIP = await getUserIP();
+          if (userIP) {
+            await supabase
+              .from('profiles')
+              .update({ registration_ip: userIP })
+              .eq('id', session.user.id);
+          }
+        }
+        
+        // Fetch user profile
+        refreshProfile();
       } else {
-        console.log('Logout successful');
-        // Clear state immediately
-        setUser(null);
-        setSession(null);
         setProfile(null);
       }
-    } catch (error) {
-      console.error('Logout exception:', error);
+      
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Refresh profile when user changes
+  useEffect(() => {
+    if (user) {
+      refreshProfile();
     }
-  };
+  }, [user]);
 
-  const value: AuthContextType = {
+  const value = {
     user,
-    session,
     profile,
-    login,
-    signup,
-    logout,
-    isLoading,
-    refreshProfile
+    session,
+    loading,
+    signIn,
+    signUp,
+    signOut,
+    refreshProfile,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
