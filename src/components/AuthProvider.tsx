@@ -1,8 +1,7 @@
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { User, Session } from "@supabase/supabase-js";
+import { supabase } from "@/integrations/supabase/client";
 
 interface UserProfile {
   id: string;
@@ -10,27 +9,27 @@ interface UserProfile {
   display_style: string;
   daily_uses_remaining: number;
   total_uses: number;
-  is_admin: boolean;
-  is_banned: boolean;
-  ban_expires_at: string | null;
-  registration_ip: string | null;
-  is_moderator: boolean;
-  has_subscription: boolean;
-  subscription_type: string | null;
-  subscription_expires_at: string | null;
-  profile_picture: string | null;
-  custom_color: string | null;
-  tags: string[] | null;
+  is_admin?: boolean;
+  is_banned?: boolean;
+  ban_expires_at?: string | null;
+  is_moderator?: boolean;
+  has_subscription?: boolean;
+  subscription_type?: string | null;
+  subscription_expires_at?: string | null;
+  profile_picture?: string | null;
+  custom_color?: string | null;
+  tags?: string[] | null;
+  registration_ip?: string | null;
 }
 
 interface AuthContextType {
   user: User | null;
-  profile: UserProfile | null;
   session: Session | null;
-  loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, username: string) => Promise<void>;
-  signOut: () => Promise<void>;
+  profile: UserProfile | null;
+  login: (email: string, password: string) => Promise<{ error: any }>;
+  signup: (email: string, password: string, username: string) => Promise<{ error: any }>;
+  logout: () => void;
+  isLoading: boolean;
   refreshProfile: () => Promise<void>;
 }
 
@@ -39,37 +38,38 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    console.warn("useAuth called outside of AuthProvider, returning default state");
+    return {
+      user: null,
+      session: null,
+      profile: null,
+      login: async () => ({ error: new Error("Auth not initialized") }),
+      signup: async () => ({ error: new Error("Auth not initialized") }),
+      logout: () => {},
+      isLoading: true,
+      refreshProfile: async () => {}
+    };
   }
   return context;
 };
 
-const getUserIP = async (): Promise<string | null> => {
-  try {
-    const response = await fetch('https://api.ipify.org?format=json');
-    const data = await response.json();
-    return data.ip;
-  } catch (error) {
-    console.error('Error getting user IP:', error);
-    return null;
-  }
-};
+interface AuthProviderProps {
+  children: ReactNode;
+}
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
-  const refreshProfile = async () => {
-    if (!user) return;
-
+  const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
 
       if (error) {
@@ -77,94 +77,35 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return;
       }
 
-      const profileData: UserProfile = {
+      // Check if user is banned and if temp ban has expired
+      if (data.is_banned && data.ban_expires_at) {
+        const banExpiry = new Date(data.ban_expires_at);
+        if (banExpiry < new Date()) {
+          // Temp ban has expired, unban the user
+          await supabase
+            .from('profiles')
+            .update({ is_banned: false, ban_expires_at: null })
+            .eq('id', userId);
+          
+          data.is_banned = false;
+          data.ban_expires_at = null;
+        }
+      }
+
+      const typedProfile: UserProfile = {
         ...data,
         registration_ip: data.registration_ip ? String(data.registration_ip) : null
       };
 
-      setProfile(profileData);
+      setProfile(typedProfile);
     } catch (error) {
-      console.error('Error refreshing profile:', error);
+      console.error('Error fetching profile:', error);
     }
   };
 
-  const signIn = async (email: string, password: string) => {
-    console.log('SignIn attempt for:', email);
-    
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      console.error('SignIn error:', error);
-      toast({
-        variant: "destructive",
-        title: "Sign in failed",
-        description: error.message,
-      });
-      throw error;
-    }
-
-    console.log('SignIn successful:', data);
-    toast({
-      title: "Welcome back!",
-      description: "You've been successfully logged in.",
-    });
-  };
-
-  const signUp = async (email: string, password: string, username: string) => {
-    try {
-      const userIP = await getUserIP();
-      const redirectUrl = `${window.location.origin}/`;
-      
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            username,
-            ip: userIP
-          }
-        }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Account created",
-        description: "Please check your email to verify your account.",
-      });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Sign up failed",
-        description: error.message,
-      });
-      throw error;
-    }
-  };
-
-  const signOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      
-      toast({
-        title: "Signed out",
-        description: "You've been successfully signed out.",
-      });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Sign out failed",
-        description: error.message,
-      });
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchProfile(user.id);
     }
   };
 
@@ -173,80 +114,150 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const initializeAuth = async () => {
       try {
-        // Get initial session
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        console.log('Initializing auth...');
         
-        if (mounted) {
-          console.log('Initial session:', initialSession?.user?.id);
-          setSession(initialSession);
-          setUser(initialSession?.user ?? null);
-          setLoading(false);
+        // First, get the current session
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
         }
+        
+        if (!mounted) return;
 
-        // Set up auth listener
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          async (event, session) => {
-            console.log('Auth event:', event, session?.user?.id);
-            
-            if (!mounted) return;
-
-            setSession(session);
-            setUser(session?.user ?? null);
-            
-            if (session?.user && event === 'SIGNED_IN') {
-              // Update IP on login
-              const userIP = await getUserIP();
-              if (userIP && mounted) {
-                try {
-                  await supabase
-                    .from('profiles')
-                    .update({ registration_ip: userIP })
-                    .eq('id', session.user.id);
-                } catch (error) {
-                  console.error('Error updating IP:', error);
-                }
-              }
-            }
-            
-            setLoading(false);
-          }
-        );
-
-        return () => {
-          subscription.unsubscribe();
-        };
+        console.log('Initial session:', currentSession?.user?.email || 'No session');
+        
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        if (currentSession?.user) {
+          await fetchProfile(currentSession.user.id);
+        }
+        
+        setIsLoading(false);
+        setInitialized(true);
+        
       } catch (error) {
         console.error('Auth initialization error:', error);
         if (mounted) {
-          setLoading(false);
+          setIsLoading(false);
+          setInitialized(true);
         }
       }
     };
 
+    // Set up the auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return;
+        
+        console.log('Auth state changed:', event, session?.user?.email || 'No user');
+        
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Use setTimeout to avoid potential deadlocks
+          setTimeout(() => {
+            if (mounted) {
+              fetchProfile(session.user.id);
+            }
+          }, 0);
+        } else {
+          setProfile(null);
+        }
+        
+        if (initialized) {
+          setIsLoading(false);
+        }
+      }
+    );
+
+    // Initialize auth
     initializeAuth();
 
     return () => {
       mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
-  // Refresh profile when user changes
-  useEffect(() => {
-    if (user) {
-      refreshProfile();
+  const login = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        console.error('Login error:', error);
+        return { error };
+      }
+      
+      console.log('Login successful for:', email);
+      return { error: null };
+    } catch (error) {
+      console.error('Login exception:', error);
+      return { error };
     }
-  }, [user]);
-
-  const value = {
-    user,
-    profile,
-    session,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-    refreshProfile,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const signup = async (email: string, password: string, username: string) => {
+    // Get user's IP address for registration tracking
+    let userIP = null;
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      userIP = data.ip;
+    } catch (error) {
+      console.error('Failed to get IP:', error);
+    }
+
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          username: username,
+          ip: userIP
+        },
+        emailRedirectTo: `${window.location.origin}/`
+      }
+    });
+    return { error };
+  };
+
+  const logout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Logout error:', error);
+      } else {
+        console.log('Logout successful');
+        // Clear state immediately
+        setUser(null);
+        setSession(null);
+        setProfile(null);
+      }
+    } catch (error) {
+      console.error('Logout exception:', error);
+    }
+  };
+
+  const value: AuthContextType = {
+    user,
+    session,
+    profile,
+    login,
+    signup,
+    logout,
+    isLoading,
+    refreshProfile
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };

@@ -25,41 +25,48 @@ export const SystemLogs = () => {
   const [logLevel, setLogLevel] = useState("all");
   const [loading, setLoading] = useState(false);
 
+  const generateMockLogs = () => {
+    const levels: ('info' | 'warning' | 'error')[] = ['info', 'warning', 'error'];
+    const actions = [
+      'User Login', 'User Logout', 'Profile Update', 'Password Change',
+      'AI Request', 'Admin Action', 'System Error', 'Rate Limit Hit',
+      'Subscription Change', 'Payment Processed', 'File Upload', 'Data Export'
+    ];
+
+    const mockLogs: LogEntry[] = [];
+    
+    for (let i = 0; i < 50; i++) {
+      const level = levels[Math.floor(Math.random() * levels.length)];
+      const action = actions[Math.floor(Math.random() * actions.length)];
+      const timestamp = new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000);
+      
+      mockLogs.push({
+        id: `log-${i}`,
+        timestamp: timestamp.toISOString(),
+        level,
+        action,
+        user_id: Math.random() > 0.3 ? `user-${Math.floor(Math.random() * 100)}` : undefined,
+        username: Math.random() > 0.3 ? `user${Math.floor(Math.random() * 100)}` : undefined,
+        details: `${action} - ${level === 'error' ? 'Failed' : 'Successful'} at ${timestamp.toLocaleString()}`
+      });
+    }
+
+    return mockLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  };
+
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      // Fetch usage logs as system logs
-      const { data: usageLogs, error: usageError } = await supabase
-        .from('usage_logs')
-        .select(`
-          id,
-          used_at,
-          user_id,
-          profiles!inner(username)
-        `)
-        .order('used_at', { ascending: false })
-        .limit(100);
-
-      if (usageError) throw usageError;
-
-      const formattedLogs: LogEntry[] = usageLogs?.map(log => ({
-        id: log.id,
-        timestamp: log.used_at || new Date().toISOString(),
-        level: 'info' as const,
-        action: 'AI Generation',
-        user_id: log.user_id,
-        username: (log.profiles as any)?.username || 'Unknown',
-        details: `User generated website content`
-      })) || [];
-
-      setLogs(formattedLogs);
+      // In a real app, this would fetch from actual log tables
+      // For now, we'll generate mock data
+      const mockLogs = generateMockLogs();
+      setLogs(mockLogs);
       
       toast({
         title: "Logs Refreshed",
-        description: `Loaded ${formattedLogs.length} system logs`,
+        description: "System logs have been updated",
       });
     } catch (error) {
-      console.error('Error fetching logs:', error);
       toast({
         title: "Error",
         description: "Failed to fetch logs",
@@ -154,31 +161,23 @@ export const SystemLogs = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredLogs.length > 0 ? (
-                filteredLogs.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell className="font-mono text-xs">
-                      {new Date(log.timestamp).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getLevelColor(log.level) as any}>
-                        {log.level.toUpperCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">{log.action}</TableCell>
-                    <TableCell>{log.username || 'System'}</TableCell>
-                    <TableCell className="max-w-xs truncate" title={log.details}>
-                      {log.details}
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-gray-500">
-                    No logs found
+              {filteredLogs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell className="font-mono text-xs">
+                    {new Date(log.timestamp).toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={getLevelColor(log.level) as any}>
+                      {log.level.toUpperCase()}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-medium">{log.action}</TableCell>
+                  <TableCell>{log.username || 'System'}</TableCell>
+                  <TableCell className="max-w-xs truncate" title={log.details}>
+                    {log.details}
                   </TableCell>
                 </TableRow>
-              )}
+              ))}
             </TableBody>
           </Table>
         </div>

@@ -1,10 +1,11 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { Key, Eye, Lock, Unlock, Globe, Bell, Mail } from "lucide-react";
+import { Key, Eye, Lock, Unlock, Globe, Bell } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,7 +19,6 @@ export const SystemManagement = () => {
   const [aiEnabled, setAiEnabled] = useState(true);
   const [siteName, setSiteName] = useState("");
   const [siteIcon, setSiteIcon] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
   const [originalPrompt, setOriginalPrompt] = useState("");
   const [paypalBasic, setPaypalBasic] = useState("");
@@ -50,7 +50,6 @@ export const SystemManagement = () => {
         setAiEnabled(settings.ai_enabled === 'true');
         setSiteName(settings.site_name || '');
         setSiteIcon(settings.site_icon || '');
-        setContactEmail(settings.contact_email || '');
         setAiPrompt(settings.ai_prompt || '');
         setOriginalPrompt(settings.ai_prompt || '');
         setPaypalBasic(settings.paypal_link_basic || '');
@@ -84,13 +83,10 @@ export const SystemManagement = () => {
           updated_by: profile?.id
         });
 
-      if (error) {
-        console.error('Error updating setting:', error);
-        throw error;
-      }
+      if (error) throw error;
       return true;
     } catch (error) {
-      console.error('Error in updateSystemSetting:', error);
+      console.error('Error updating setting:', error);
       return false;
     }
   };
@@ -118,7 +114,6 @@ export const SystemManagement = () => {
     const updates = [
       updateSystemSetting('site_name', siteName),
       updateSystemSetting('site_icon', siteIcon),
-      updateSystemSetting('contact_email', contactEmail),
       updateSystemSetting('username_cooldown_days', usernameCooldown)
     ];
 
@@ -139,27 +134,16 @@ export const SystemManagement = () => {
   };
 
   const updateAiPrompt = async () => {
-    if (!aiPrompt.trim()) {
-      toast({
-        title: "Error",
-        description: "AI prompt cannot be empty",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const confirmed = window.confirm("Are you sure you want to update the AI prompt? This will affect all future generations.");
+    const confirmed = confirm("Are you sure you want to update the AI prompt?");
     if (!confirmed) return;
 
-    console.log('Updating AI prompt to:', aiPrompt);
-    
     const success = await updateSystemSetting('ai_prompt', aiPrompt);
     
     if (success) {
       setOriginalPrompt(aiPrompt);
       toast({
         title: "Success",
-        description: "AI prompt updated successfully",
+        description: "AI prompt updated",
       });
     } else {
       toast({
@@ -171,8 +155,6 @@ export const SystemManagement = () => {
   };
 
   const updatePaypalLinks = async () => {
-    console.log('Updating PayPal links:', { paypalBasic, paypalPremium, paypalBusiness });
-    
     const updates = [
       updateSystemSetting('paypal_link_basic', paypalBasic),
       updateSystemSetting('paypal_link_premium', paypalPremium),
@@ -184,7 +166,7 @@ export const SystemManagement = () => {
     if (results.every(Boolean)) {
       toast({
         title: "Success",
-        description: "PayPal links updated successfully",
+        description: "PayPal links updated",
       });
     } else {
       toast({
@@ -196,33 +178,15 @@ export const SystemManagement = () => {
   };
 
   const createAnnouncement = async () => {
-    if (!announcementTitle.trim() || !announcementMessage.trim()) {
-      toast({
-        title: "Error",
-        description: "Title and message are required",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!announcementTitle || !announcementMessage) return;
 
     try {
       let expiresAt = null;
       if (announcementDuration && !announcementPersistent) {
         const duration = parseInt(announcementDuration);
-        if (duration > 0) {
-          expiresAt = new Date();
-          expiresAt.setHours(expiresAt.getHours() + duration);
-        }
+        expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + duration);
       }
-
-      console.log('Creating announcement:', {
-        title: announcementTitle,
-        message: announcementMessage,
-        type: announcementType,
-        is_persistent: announcementPersistent,
-        expires_at: expiresAt?.toISOString(),
-        created_by: profile?.id
-      });
 
       const { error } = await supabase
         .from('announcements')
@@ -235,24 +199,18 @@ export const SystemManagement = () => {
           created_by: profile?.id
         });
 
-      if (error) {
-        console.error('Error creating announcement:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       toast({
         title: "Success",
-        description: "Announcement created successfully",
+        description: "Announcement created",
       });
 
-      // Reset form
       setAnnouncementTitle("");
       setAnnouncementMessage("");
       setAnnouncementDuration("");
       setAnnouncementPersistent(false);
-      setAnnouncementType("info");
     } catch (error) {
-      console.error('Error creating announcement:', error);
       toast({
         title: "Error",
         description: "Failed to create announcement",
@@ -262,14 +220,7 @@ export const SystemManagement = () => {
   };
 
   const updateGeminiApiKey = async () => {
-    if (!geminiApiKey || geminiApiKey === '••••••••••••••••') {
-      toast({
-        title: "Error",
-        description: "Please enter a new API key",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!geminiApiKey || geminiApiKey === '••••••••••••••••') return;
 
     try {
       const { error } = await supabase
@@ -281,7 +232,6 @@ export const SystemManagement = () => {
         });
 
       if (error) {
-        console.error('Error updating API key:', error);
         toast({
           title: "Error",
           description: "Failed to update API key",
@@ -296,7 +246,6 @@ export const SystemManagement = () => {
       });
       setGeminiApiKey('••••••••••••••••');
     } catch (error) {
-      console.error('Error updating API key:', error);
       toast({
         title: "Error",
         description: "Failed to update API key",
@@ -306,18 +255,9 @@ export const SystemManagement = () => {
   };
 
   const lookupUserIp = async () => {
-    if (!ipLookupUsername.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a username",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!ipLookupUsername) return;
 
     try {
-      console.log('Looking up IP for username:', ipLookupUsername);
-      
       const { data, error } = await supabase
         .from('profiles')
         .select('registration_ip')
@@ -325,32 +265,22 @@ export const SystemManagement = () => {
         .single();
 
       if (error || !data) {
-        console.error('User lookup error:', error);
         toast({
           title: "Error",
           description: "User not found",
           variant: "destructive",
         });
-        setFoundUserIp("");
         return;
       }
 
       const ipValue = data.registration_ip ? String(data.registration_ip) : "No IP recorded";
-      console.log('Found IP:', ipValue);
       setFoundUserIp(ipValue);
-      
-      toast({
-        title: "Success",
-        description: `IP found for user ${ipLookupUsername}`,
-      });
     } catch (error) {
-      console.error('Error looking up user IP:', error);
       toast({
         title: "Error",
         description: "Failed to lookup user IP",
         variant: "destructive",
       });
-      setFoundUserIp("");
     }
   };
 
@@ -386,11 +316,6 @@ export const SystemManagement = () => {
           onChange={(e) => setSiteIcon(e.target.value)}
         />
         <Input
-          placeholder="Contact Email"
-          value={contactEmail}
-          onChange={(e) => setContactEmail(e.target.value)}
-        />
-        <Input
           type="number"
           placeholder="Username Change Cooldown (days)"
           value={usernameCooldown}
@@ -407,7 +332,7 @@ export const SystemManagement = () => {
       <div className="space-y-2">
         <Label>AI Prompt Management</Label>
         <div className="text-xs text-gray-600 mb-2">
-          <strong>Current:</strong> {originalPrompt ? originalPrompt.substring(0, 100) + '...' : 'No prompt set'}
+          <strong>Original:</strong> {originalPrompt.substring(0, 100)}...
         </div>
         <Textarea
           placeholder="AI Generation Prompt"
@@ -430,7 +355,7 @@ export const SystemManagement = () => {
           onChange={(e) => setPaypalBasic(e.target.value)}
         />
         <Input
-          placeholder="Premium Plan PayPal Link"  
+          placeholder="Premium Plan PayPal Link"
           value={paypalPremium}
           onChange={(e) => setPaypalPremium(e.target.value)}
         />
@@ -522,9 +447,9 @@ export const SystemManagement = () => {
           </Button>
         </div>
         {foundUserIp && (
-          <div className="text-sm text-gray-600 bg-gray-100 p-2 rounded">
-            <strong>IP:</strong> {foundUserIp}
-          </div>
+          <p className="text-sm text-gray-600 bg-gray-100 p-2 rounded">
+            IP: {foundUserIp}
+          </p>
         )}
       </div>
     </div>

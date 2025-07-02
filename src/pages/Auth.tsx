@@ -8,33 +8,59 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Mail, Lock, User, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { useToast } from "@/hooks/use-toast";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [signupData, setSignupData] = useState({ email: "", password: "", username: "" });
-  const { signIn, signUp, user, loading: authLoading } = useAuth();
+  const [isVisible, setIsVisible] = useState(false);
+  const [pageLoaded, setPageLoaded] = useState(false);
+  const { login, signup, user, isLoading: authLoading } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user && !authLoading) {
+    // Small delay to ensure everything is loaded
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+      setPageLoaded(true);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    // Only redirect if user is authenticated and auth is not loading
+    if (user && !authLoading && pageLoaded) {
       console.log('User authenticated, redirecting to home');
       navigate("/", { replace: true });
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, pageLoaded, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading) return;
-    
     setIsLoading(true);
-    console.log('Attempting login...');
 
     try {
-      await signIn(loginData.email, loginData.password);
-      console.log('Login completed successfully');
-    } catch (error: any) {
-      console.error('Login failed:', error);
+      const { error } = await login(loginData.email, loginData.password);
+      if (error) {
+        toast({
+          title: "Login failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Welcome back!",
+          description: "You've been successfully logged in.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An error occurred during login. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -42,20 +68,35 @@ const Auth = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLoading) return;
-    
     setIsLoading(true);
 
     try {
-      await signUp(signupData.email, signupData.password, signupData.username);
-    } catch (error: any) {
-      console.error('Signup failed:', error);
+      const { error } = await signup(signupData.email, signupData.password, signupData.username);
+      if (error) {
+        toast({
+          title: "Signup failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Account created!",
+          description: "Please check your email to verify your account.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An error occurred during signup. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (authLoading) {
+  // Show loading only during initial auth check
+  if (!pageLoaded || (authLoading && !isVisible)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
@@ -67,7 +108,7 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4 transition-opacity duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
       <Card className="w-full max-w-md p-8 bg-white/80 backdrop-blur-xl border-white/20 shadow-xl">
         <div className="flex items-center mb-6">
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="mr-3">
@@ -98,7 +139,6 @@ const Auth = () => {
                     onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
                     className="pl-10"
                     required
-                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -115,7 +155,6 @@ const Auth = () => {
                     onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
                     className="pl-10"
                     required
-                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -151,7 +190,6 @@ const Auth = () => {
                     onChange={(e) => setSignupData(prev => ({ ...prev, username: e.target.value }))}
                     className="pl-10"
                     required
-                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -168,7 +206,6 @@ const Auth = () => {
                     onChange={(e) => setSignupData(prev => ({ ...prev, email: e.target.value }))}
                     className="pl-10"
                     required
-                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -185,7 +222,6 @@ const Auth = () => {
                     onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
                     className="pl-10"
                     required
-                    disabled={isLoading}
                   />
                 </div>
               </div>

@@ -1,116 +1,70 @@
 
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
-import { Users, Activity, TrendingUp, Calendar } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { TrendingUp, Users, Activity, Crown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface AnalyticsData {
   totalUsers: number;
-  activeUsers: number;
-  totalGenerations: number;
-  dailyGenerations: { date: string; count: number }[];
-  userDistribution: { type: string; count: number; color: string }[];
-  topUsers: { username: string; total_uses: number }[];
+  totalUses: number;
+  adminCount: number;
+  moderatorCount: number;
+  bannedCount: number;
+  subscriptionCount: number;
+  usersByDate: { date: string; count: number }[];
+  usesByUser: { username: string; uses: number }[];
 }
 
 export const AnalyticsDashboard = () => {
-  const [analytics, setAnalytics] = useState<AnalyticsData>({
-    totalUsers: 0,
-    activeUsers: 0,
-    totalGenerations: 0,
-    dailyGenerations: [],
-    userDistribution: [],
-    topUsers: []
-  });
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchAnalytics = async () => {
     try {
-      // Get total users
-      const { count: totalUsers } = await supabase
+      const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('*', { count: 'exact', head: true });
+        .select('*');
 
-      // Get active users (users who have used the service in the last 7 days)
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: activeUsersData } = await supabase
-        .from('usage_logs')
-        .select('user_id')
-        .gte('used_at', sevenDaysAgo);
+      if (error) throw error;
 
-      const activeUsers = new Set(activeUsersData?.map(log => log.user_id) || []).size;
+      const totalUsers = profiles.length;
+      const totalUses = profiles.reduce((sum, user) => sum + (user.total_uses || 0), 0);
+      const adminCount = profiles.filter(user => user.is_admin).length;
+      const moderatorCount = profiles.filter(user => user.is_moderator).length;
+      const bannedCount = profiles.filter(user => user.is_banned).length;
+      const subscriptionCount = profiles.filter(user => user.has_subscription).length;
 
-      // Get total generations
-      const { count: totalGenerations } = await supabase
-        .from('usage_logs')
-        .select('*', { count: 'exact', head: true });
-
-      // Get daily generations for the last 30 days
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const { data: usageLogs } = await supabase
-        .from('usage_logs')
-        .select('used_at')
-        .gte('used_at', thirtyDaysAgo.toISOString())
-        .order('used_at', { ascending: true });
-
-      // Group by date
-      const dailyGenerations: { [key: string]: number } = {};
-      usageLogs?.forEach(log => {
-        if (log.used_at) {
-          const date = new Date(log.used_at).toLocaleDateString();
-          dailyGenerations[date] = (dailyGenerations[date] || 0) + 1;
+      // Group users by creation date
+      const usersByDate = profiles.reduce((acc: any, user) => {
+        const date = new Date(user.created_at || '').toLocaleDateString();
+        const existing = acc.find((item: any) => item.date === date);
+        if (existing) {
+          existing.count++;
+        } else {
+          acc.push({ date, count: 1 });
         }
-      });
+        return acc;
+      }, []).slice(-7); // Last 7 days
 
-      const dailyGenerationsArray = Object.entries(dailyGenerations).map(([date, count]) => ({
-        date,
-        count
-      }));
-
-      // Get user distribution
-      const { data: allUsers } = await supabase
-        .from('profiles')
-        .select('is_admin, is_moderator, has_subscription, subscription_type');
-
-      const userDistribution = [
-        { 
-          type: 'Regular Users', 
-          count: allUsers?.filter(u => !u.is_admin && !u.is_moderator && !u.has_subscription).length || 0,
-          color: '#8884d8'
-        },
-        { 
-          type: 'Subscribers', 
-          count: allUsers?.filter(u => u.has_subscription).length || 0,
-          color: '#82ca9d'
-        },
-        { 
-          type: 'Moderators', 
-          count: allUsers?.filter(u => u.is_moderator).length || 0,
-          color: '#ffc658'
-        },
-        { 
-          type: 'Admins', 
-          count: allUsers?.filter(u => u.is_admin).length || 0,
-          color: '#ff7300'
-        }
-      ];
-
-      // Get top users
-      const { data: topUsers } = await supabase
-        .from('profiles')
-        .select('username, total_uses')
-        .order('total_uses', { ascending: false })
-        .limit(10);
+      // Top users by total uses
+      const usesByUser = profiles
+        .sort((a, b) => (b.total_uses || 0) - (a.total_uses || 0))
+        .slice(0, 10)
+        .map(user => ({
+          username: user.username,
+          uses: user.total_uses || 0
+        }));
 
       setAnalytics({
-        totalUsers: totalUsers || 0,
-        activeUsers,
-        totalGenerations: totalGenerations || 0,
-        dailyGenerations: dailyGenerationsArray,
-        userDistribution,
-        topUsers: topUsers || []
+        totalUsers,
+        totalUses,
+        adminCount,
+        moderatorCount,
+        bannedCount,
+        subscriptionCount,
+        usersByDate,
+        usesByUser
       });
     } catch (error) {
       console.error('Error fetching analytics:', error);
@@ -124,12 +78,22 @@ export const AnalyticsDashboard = () => {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading analytics...</div>
-      </div>
-    );
+    return <div className="text-center">Loading analytics...</div>;
   }
+
+  if (!analytics) {
+    return <div className="text-center">Failed to load analytics</div>;
+  }
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+
+  const pieData = [
+    { name: 'Regular Users', value: analytics.totalUsers - analytics.adminCount - analytics.moderatorCount },
+    { name: 'Admins', value: analytics.adminCount },
+    { name: 'Moderators', value: analytics.moderatorCount },
+    { name: 'Banned', value: analytics.bannedCount },
+    { name: 'Subscribers', value: analytics.subscriptionCount }
+  ];
 
   return (
     <div className="space-y-6">
@@ -138,83 +102,78 @@ export const AnalyticsDashboard = () => {
         Analytics Dashboard
       </h3>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="p-4">
           <div className="flex items-center space-x-2">
-            <Users className="w-5 h-5 text-blue-600" />
+            <Users className="w-8 h-8 text-blue-500" />
             <div>
-              <p className="text-sm text-gray-600">Total Users</p>
               <p className="text-2xl font-bold">{analytics.totalUsers}</p>
+              <p className="text-sm text-gray-600">Total Users</p>
             </div>
           </div>
         </Card>
 
         <Card className="p-4">
           <div className="flex items-center space-x-2">
-            <Activity className="w-5 h-5 text-green-600" />
+            <Activity className="w-8 h-8 text-green-500" />
             <div>
-              <p className="text-sm text-gray-600">Active Users (7d)</p>
-              <p className="text-2xl font-bold">{analytics.activeUsers}</p>
+              <p className="text-2xl font-bold">{analytics.totalUses}</p>
+              <p className="text-sm text-gray-600">Total Uses</p>
             </div>
           </div>
         </Card>
 
         <Card className="p-4">
           <div className="flex items-center space-x-2">
-            <Calendar className="w-5 h-5 text-purple-600" />
+            <Crown className="w-8 h-8 text-yellow-500" />
             <div>
-              <p className="text-sm text-gray-600">Total Generations</p>
-              <p className="text-2xl font-bold">{analytics.totalGenerations}</p>
+              <p className="text-2xl font-bold">{analytics.adminCount}</p>
+              <p className="text-sm text-gray-600">Admins</p>
             </div>
           </div>
         </Card>
 
         <Card className="p-4">
           <div className="flex items-center space-x-2">
-            <TrendingUp className="w-5 h-5 text-orange-600" />
+            <Users className="w-8 h-8 text-purple-500" />
             <div>
-              <p className="text-sm text-gray-600">Avg per User</p>
-              <p className="text-2xl font-bold">
-                {analytics.totalUsers > 0 ? Math.round(analytics.totalGenerations / analytics.totalUsers) : 0}
-              </p>
+              <p className="text-2xl font-bold">{analytics.subscriptionCount}</p>
+              <p className="text-sm text-gray-600">Subscribers</p>
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Daily Generations Chart */}
         <Card className="p-4">
-          <h4 className="font-medium mb-4">Daily Generations (Last 30 Days)</h4>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={analytics.dailyGenerations}>
+          <h4 className="text-lg font-semibold mb-4">User Registrations (Last 7 Days)</h4>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={analytics.usersByDate}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" />
               <YAxis />
               <Tooltip />
-              <Line type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={2} />
-            </LineChart>
+              <Bar dataKey="count" fill="#8884d8" />
+            </BarChart>
           </ResponsiveContainer>
         </Card>
 
-        {/* User Distribution Chart */}
         <Card className="p-4">
-          <h4 className="font-medium mb-4">User Distribution</h4>
-          <ResponsiveContainer width="100%" height={300}>
+          <h4 className="text-lg font-semibold mb-4">User Distribution</h4>
+          <ResponsiveContainer width="100%" height={200}>
             <PieChart>
               <Pie
-                data={analytics.userDistribution}
+                data={pieData}
                 cx="50%"
                 cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                 outerRadius={80}
                 fill="#8884d8"
-                dataKey="count"
-                label={({ type, count }) => `${type}: ${count}`}
+                dataKey="value"
               >
-                {analytics.userDistribution.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+                {pieData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />
@@ -223,24 +182,17 @@ export const AnalyticsDashboard = () => {
         </Card>
       </div>
 
-      {/* Top Users */}
       <Card className="p-4">
-        <h4 className="font-medium mb-4">Top Users by Usage</h4>
-        <div className="space-y-2">
-          {analytics.topUsers.length > 0 ? (
-            analytics.topUsers.map((user, index) => (
-              <div key={user.username} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                <div className="flex items-center space-x-2">
-                  <Badge variant="outline">#{index + 1}</Badge>
-                  <span className="font-medium">{user.username}</span>
-                </div>
-                <span className="text-sm text-gray-600">{user.total_uses} uses</span>
-              </div>
-            ))
-          ) : (
-            <div className="text-center text-gray-500">No usage data available</div>
-          )}
-        </div>
+        <h4 className="text-lg font-semibold mb-4">Top Users by Total Uses</h4>
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart data={analytics.usesByUser}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="username" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="uses" fill="#82ca9d" />
+          </BarChart>
+        </ResponsiveContainer>
       </Card>
     </div>
   );
