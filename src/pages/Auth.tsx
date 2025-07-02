@@ -8,47 +8,33 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Mail, Lock, User, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
-import { useToast } from "@/hooks/use-toast";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [signupData, setSignupData] = useState({ email: "", password: "", username: "" });
-  const [isVisible, setIsVisible] = useState(false);
-  const [pageLoaded, setPageLoaded] = useState(false);
   const { signIn, signUp, user, loading: authLoading } = useAuth();
-  const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Small delay to ensure everything is loaded
-    const timer = setTimeout(() => {
-      setIsVisible(true);
-      setPageLoaded(true);
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    // Only redirect if user is authenticated and auth is not loading
-    if (user && !authLoading && pageLoaded) {
+    if (user && !authLoading) {
       console.log('User authenticated, redirecting to home');
       navigate("/", { replace: true });
     }
-  }, [user, authLoading, pageLoaded, navigate]);
+  }, [user, authLoading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
+    
     setIsLoading(true);
+    console.log('Attempting login...');
 
     try {
       await signIn(loginData.email, loginData.password);
-      toast({
-        title: "Welcome back!",
-        description: "You've been successfully logged in.",
-      });
+      console.log('Login completed successfully');
     } catch (error: any) {
-      // Error handling is already done in the signIn method
+      console.error('Login failed:', error);
     } finally {
       setIsLoading(false);
     }
@@ -56,19 +42,20 @@ const Auth = () => {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
+    
     setIsLoading(true);
 
     try {
       await signUp(signupData.email, signupData.password, signupData.username);
     } catch (error: any) {
-      // Error handling is already done in the signUp method
+      console.error('Signup failed:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Show loading only during initial auth check
-  if (!pageLoaded || (authLoading && !isVisible)) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="text-center">
@@ -80,7 +67,7 @@ const Auth = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4 transition-opacity duration-500 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8 bg-white/80 backdrop-blur-xl border-white/20 shadow-xl">
         <div className="flex items-center mb-6">
           <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="mr-3">
@@ -111,6 +98,7 @@ const Auth = () => {
                     onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
                     className="pl-10"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -127,6 +115,7 @@ const Auth = () => {
                     onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
                     className="pl-10"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -162,6 +151,7 @@ const Auth = () => {
                     onChange={(e) => setSignupData(prev => ({ ...prev, username: e.target.value }))}
                     className="pl-10"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -178,6 +168,7 @@ const Auth = () => {
                     onChange={(e) => setSignupData(prev => ({ ...prev, email: e.target.value }))}
                     className="pl-10"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -194,6 +185,7 @@ const Auth = () => {
                     onChange={(e) => setSignupData(prev => ({ ...prev, password: e.target.value }))}
                     className="pl-10"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>

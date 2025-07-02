@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Loader2, Send, Sparkles, Lock } from "lucide-react";
+import { Loader2, Send, Lock } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,7 +29,6 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
   const sendMessage = async () => {
     if (!input.trim() || isLoading || !user || !profile) return;
 
-    // Check if user is banned
     if (profile.is_banned) {
       toast({
         title: "Account Banned",
@@ -39,7 +38,6 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
       return;
     }
 
-    // Check daily usage limit
     if (profile.daily_uses_remaining <= 0) {
       toast({
         title: "Daily Limit Reached",
@@ -55,7 +53,6 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
     setIsLoading(true);
 
     try {
-      // Use secure edge function for AI requests
       const { data, error } = await supabase.functions.invoke('secure-ai', {
         body: { prompt: input }
       });
@@ -70,7 +67,6 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
       setMessages(prev => [...prev, assistantMessage]);
       onResponse(aiResponse);
 
-      // Refresh profile to update usage count
       await refreshProfile();
 
       toast({
@@ -126,7 +122,7 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
             <div className="absolute inset-0 bg-gray-100/50 flex items-center justify-center rounded-md">
               <div className="flex items-center space-x-2 text-gray-600">
                 <Lock className="w-4 h-4" />
-                <span className="text-sm font-medium">Sign in to continue</span>
+                <span className="text-sm font-medium">Log in to continue</span>
               </div>
             </div>
           </div>
