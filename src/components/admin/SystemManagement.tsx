@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { Key, Eye, Lock, Unlock, Globe, Bell } from "lucide-react";
+import { Key, Eye, Lock, Unlock, Globe, Bell, Mail } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +18,7 @@ export const SystemManagement = () => {
   const [aiEnabled, setAiEnabled] = useState(true);
   const [siteName, setSiteName] = useState("");
   const [siteIcon, setSiteIcon] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
   const [originalPrompt, setOriginalPrompt] = useState("");
   const [paypalBasic, setPaypalBasic] = useState("");
@@ -50,6 +50,7 @@ export const SystemManagement = () => {
         setAiEnabled(settings.ai_enabled === 'true');
         setSiteName(settings.site_name || '');
         setSiteIcon(settings.site_icon || '');
+        setContactEmail(settings.contact_email || '');
         setAiPrompt(settings.ai_prompt || '');
         setOriginalPrompt(settings.ai_prompt || '');
         setPaypalBasic(settings.paypal_link_basic || '');
@@ -117,6 +118,7 @@ export const SystemManagement = () => {
     const updates = [
       updateSystemSetting('site_name', siteName),
       updateSystemSetting('site_icon', siteIcon),
+      updateSystemSetting('contact_email', contactEmail),
       updateSystemSetting('username_cooldown_days', usernameCooldown)
     ];
 
@@ -382,6 +384,11 @@ export const SystemManagement = () => {
           placeholder="Site Icon URL"
           value={siteIcon}
           onChange={(e) => setSiteIcon(e.target.value)}
+        />
+        <Input
+          placeholder="Contact Email"
+          value={contactEmail}
+          onChange={(e) => setContactEmail(e.target.value)}
         />
         <Input
           type="number"

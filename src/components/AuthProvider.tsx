@@ -99,14 +99,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) throw error;
 
-      // Update user's IP address after successful login
-      const userIP = await getUserIP();
-      if (userIP && user) {
-        await supabase
-          .from('profiles')
-          .update({ registration_ip: userIP })
-          .eq('id', user.id);
-      }
+      toast({
+        title: "Welcome back!",
+        description: "You've been successfully logged in.",
+      });
 
     } catch (error: any) {
       toast({
@@ -123,10 +119,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Get user's IP before signup
       const userIP = await getUserIP();
       
+      const redirectUrl = `${window.location.origin}/`;
+      
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
+          emailRedirectTo: redirectUrl,
           data: {
             username,
             ip: userIP
@@ -154,6 +153,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      
+      // Clear state immediately
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      
+      toast({
+        title: "Signed out",
+        description: "You've been successfully signed out.",
+      });
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -164,36 +173,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    let mounted = true;
 
-    // Listen for auth changes
+    // Set up auth state listener FIRST
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.id);
       
+      if (!mounted) return;
+
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        // Update IP on login
+        // Update IP on login (deferred to avoid callback issues)
         if (event === 'SIGNED_IN') {
-          const userIP = await getUserIP();
-          if (userIP) {
-            await supabase
-              .from('profiles')
-              .update({ registration_ip: userIP })
-              .eq('id', session.user.id);
-          }
+          setTimeout(async () => {
+            const userIP = await getUserIP();
+            if (userIP && mounted) {
+              try {
+                await supabase
+                  .from('profiles')
+                  .update({ registration_ip: userIP })
+                  .eq('id', session.user.id);
+              } catch (error) {
+                console.error('Error updating IP:', error);
+              }
+            }
+          }, 0);
         }
         
-        // Fetch user profile
-        refreshProfile();
+        // Fetch user profile (deferred to avoid callback issues)
+        setTimeout(() => {
+          if (mounted) {
+            refreshProfile();
+          }
+        }, 0);
       } else {
         setProfile(null);
       }
@@ -201,7 +217,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // THEN get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (!session) {
+          setLoading(false);
+        }
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Refresh profile when user changes
