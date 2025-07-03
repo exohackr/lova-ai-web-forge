@@ -21,67 +21,6 @@ export const SiteGenerator = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const trackUsage = async () => {
-    if (!user || !profile) return false;
-
-    // Check if user has uses remaining (diddy has unlimited)
-    if (profile.username !== 'diddy' && profile.daily_uses_remaining <= 0) {
-      toast({
-        title: "No uses remaining",
-        description: "You've used all your daily credits. More will be available tomorrow!",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    try {
-      // Log the usage
-      const { error: logError } = await supabase
-        .from('usage_logs')
-        .insert([{ user_id: user.id }]);
-
-      if (logError) {
-        console.error('Error logging usage:', logError);
-        return false;
-      }
-
-      // Update user's remaining uses and total uses (unless they're diddy)
-      if (profile.username !== 'diddy') {
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ 
-            daily_uses_remaining: profile.daily_uses_remaining - 1,
-            total_uses: profile.total_uses + 1
-          })
-          .eq('id', user.id);
-
-        if (updateError) {
-          console.error('Error updating profile:', updateError);
-          return false;
-        }
-      } else {
-        // For diddy, just update total uses
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ 
-            total_uses: profile.total_uses + 1
-          })
-          .eq('id', user.id);
-
-        if (updateError) {
-          console.error('Error updating profile:', updateError);
-          return false;
-        }
-      }
-
-      await refreshProfile();
-      return true;
-    } catch (error) {
-      console.error('Error tracking usage:', error);
-      return false;
-    }
-  };
-
   const generateSite = async () => {
     if (!user) {
       navigate("/auth");
@@ -97,12 +36,30 @@ export const SiteGenerator = () => {
       return;
     }
 
-    const canProceed = await trackUsage();
-    if (!canProceed) return;
+    if (!profile) {
+      toast({
+        title: "Profile not found",
+        description: "Please refresh the page and try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check usage limits
+    if (profile.username !== 'diddy' && profile.daily_uses_remaining <= 0) {
+      toast({
+        title: "No uses remaining",
+        description: "You've used all your daily credits. More will be available tomorrow!",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsGenerating(true);
     
     try {
+      console.log('Starting site generation for user:', profile.username);
+      
       const prompt = `Generate a complete, modern, and fully responsive HTML document for a website based on the following description.
       The HTML should be well-structured, include a <head> section with appropriate meta tags for responsiveness and title, and a <body> section.
       Use Tailwind CSS classes exclusively for all styling. Do not include any <style> tags or inline CSS.
@@ -110,40 +67,89 @@ export const SiteGenerator = () => {
       Ensure good visual design, layout, and user experience. Include dummy content where appropriate.
       Description: ${description}`;
 
-      const apiKey = "AIzaSyDY7qMaXLfpEPUJmyyzF5tLpKVtSIt0fUg";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+      console.log('Calling secure AI edge function...');
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }]
-        })
+      // Use secure edge function for AI requests
+      const { data, error } = await supabase.functions.invoke('secure-ai', {
+        body: { prompt: prompt }
       });
 
-      const result = await response.json();
+      console.log('Edge function response:', { data, error });
 
-      if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
-        const generatedText = result.candidates[0].content.parts[0].text;
-        const htmlMatch = generatedText.match(/```html\n(.*?)```/s);
-        const htmlContent = htmlMatch ? htmlMatch[1] : generatedText;
-        
-        setGeneratedHtml(htmlContent);
-        setShowChat(true);
-        setShowPreview(true);
-        
-        toast({
-          title: "Site generated!",
-          description: "Your website has been created successfully. You can now preview, view code, or download it.",
-        });
-      } else {
-        throw new Error("No content generated");
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Failed to generate website');
       }
+
+      if (!data) {
+        throw new Error('No data received from AI service');
+      }
+
+      // Extract the AI response
+      const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      
+      if (!aiResponse) {
+        console.error('Invalid AI response structure:', data);
+        throw new Error('Invalid response from AI service');
+      }
+
+      console.log('AI response received, processing HTML...');
+
+      // Extract HTML from the response
+      const htmlMatch = aiResponse.match(/```html\n(.*?)```/s);
+      let htmlContent = htmlMatch ? htmlMatch[1] : aiResponse;
+      
+      // Clean up the HTML content
+      htmlContent = htmlContent.trim();
+      
+      // If it doesn't look like HTML, wrap it
+      if (!htmlContent.toLowerCase().includes('<!doctype') && !htmlContent.toLowerCase().includes('<html')) {
+        htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generated Website</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  ${htmlContent}
+</body>
+</html>`;
+      }
+      
+      setGeneratedHtml(htmlContent);
+      setShowChat(true);
+      setShowPreview(true);
+      
+      // Refresh profile to get updated usage count
+      await refreshProfile();
+      
+      toast({
+        title: "Site generated!",
+        description: "Your website has been created successfully. You can now preview, view code, or download it.",
+      });
+      
+      console.log('Site generation completed successfully');
+      
     } catch (error) {
       console.error("Error generating site:", error);
+      
+      let errorMessage = "Failed to generate your website. Please try again.";
+      
+      if (error.message?.includes('Daily usage limit exceeded')) {
+        errorMessage = "You've reached your daily usage limit. Try again tomorrow!";
+      } else if (error.message?.includes('User is banned')) {
+        errorMessage = "Your account has been restricted. Contact support for assistance.";
+      } else if (error.message?.includes('Unauthorized')) {
+        errorMessage = "Please log in again to continue.";
+        navigate("/auth");
+        return;
+      }
+      
       toast({
         title: "Generation failed",
-        description: "Failed to generate your website. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

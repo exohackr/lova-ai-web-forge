@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Loader2, Send, Sparkles } from "lucide-react";
+import { Loader2, Send, Sparkles, Lock } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,8 +37,8 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
       return;
     }
 
-    // Check daily usage limit
-    if (profile.daily_uses_remaining <= 0) {
+    // Check daily usage limit (diddy has unlimited)
+    if (profile.username !== 'diddy' && profile.daily_uses_remaining <= 0) {
       toast({
         title: "Daily Limit Reached",
         description: "You've reached your daily usage limit. Try again tomorrow!",
@@ -53,12 +53,17 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
     setIsLoading(true);
 
     try {
+      console.log('Sending message to AI:', input);
+      
       // Use secure edge function for AI requests
       const { data, error } = await supabase.functions.invoke('secure-ai', {
         body: { prompt: input }
       });
 
+      console.log('AI response:', { data, error });
+
       if (error) {
+        console.error('AI request error:', error);
         throw error;
       }
 
@@ -71,15 +76,30 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
       // Refresh profile to update usage count
       await refreshProfile();
 
+      const remainingUses = profile.username === 'diddy' ? 
+        'unlimited' : 
+        `${Math.max(0, profile.daily_uses_remaining - 1)}`;
+
       toast({
         title: "Success!",
-        description: `Generated response! ${profile.daily_uses_remaining - 1} uses remaining today.`,
+        description: `Generated response! ${remainingUses === 'unlimited' ? 'Unlimited uses available' : `${remainingUses} uses remaining today`}.`,
       });
     } catch (error) {
       console.error('Error sending message:', error);
+      
+      let errorMessage = "Failed to generate response. Please try again.";
+      
+      if (error.message?.includes('Daily usage limit exceeded')) {
+        errorMessage = "You've reached your daily usage limit. Try again tomorrow!";
+      } else if (error.message?.includes('User is banned')) {
+        errorMessage = "Your account has been restricted.";
+      } else if (error.message?.includes('Unauthorized')) {
+        errorMessage = "Please log in again to continue.";
+      }
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to generate response. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -90,7 +110,7 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
   if (!user) {
     return (
       <Card className="p-6 text-center">
-        <Sparkles className="w-12 h-12 mx-auto mb-4 text-purple-600" />
+        <Lock className="w-12 h-12 mx-auto mb-4 text-gray-400" />
         <h3 className="text-lg font-semibold mb-2">Sign in to use AI</h3>
         <p className="text-gray-600">Please sign in to start generating content with AI.</p>
       </Card>
@@ -111,7 +131,9 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">AI Chat</h3>
         <div className="text-sm text-gray-600">
-          {profile?.daily_uses_remaining || 0} uses remaining today
+          {profile?.username === 'diddy' ? 
+            '∞ unlimited uses' : 
+            `${profile?.daily_uses_remaining || 0} uses remaining today`}
         </div>
       </div>
 
@@ -148,7 +170,7 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
         />
         <Button
           onClick={sendMessage}
-          disabled={!input.trim() || isLoading || (profile?.daily_uses_remaining || 0) <= 0}
+          disabled={!input.trim() || isLoading || (profile?.username !== 'diddy' && (profile?.daily_uses_remaining || 0) <= 0)}
           className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
         >
           {isLoading ? (
@@ -159,7 +181,7 @@ export const ChatInterface = ({ onResponse }: ChatInterfaceProps) => {
         </Button>
       </div>
 
-      {(profile?.daily_uses_remaining || 0) <= 0 && (
+      {profile?.username !== 'diddy' && (profile?.daily_uses_remaining || 0) <= 0 && (
         <div className="text-center p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-yellow-800">
             You've reached your daily limit of 5 uses. Come back tomorrow for more!

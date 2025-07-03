@@ -13,6 +13,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Edge function called');
+    
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -22,11 +24,14 @@ serve(async (req) => {
     // Get user from JWT
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
     if (userError || !user) {
+      console.error('Auth error:', userError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    console.log('User authenticated:', user.id);
 
     // Get user profile to check if banned
     const { data: profile, error: profileError } = await supabaseClient
@@ -36,11 +41,14 @@ serve(async (req) => {
       .single()
 
     if (profileError || !profile) {
+      console.error('Profile error:', profileError);
       return new Response(JSON.stringify({ error: 'Profile not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    console.log('Profile found:', profile.username, 'Uses remaining:', profile.daily_uses_remaining);
 
     // Check if user is banned
     if (profile.is_banned) {
@@ -50,32 +58,31 @@ serve(async (req) => {
       })
     }
 
-    // Check daily usage limit
-    if (profile.daily_uses_remaining <= 0) {
+    // Check daily usage limit (diddy has unlimited)
+    if (profile.username !== 'diddy' && profile.daily_uses_remaining <= 0) {
       return new Response(JSON.stringify({ error: 'Daily usage limit exceeded' }), {
         status: 429,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Get API key from secure storage
-    const { data: apiKeyData, error: apiKeyError } = await supabaseClient
-      .from('api_keys')
-      .select('key_value')
-      .eq('key_name', 'GEMINI_API_KEY')
-      .single()
+    const { prompt } = await req.json()
+    console.log('Prompt received, length:', prompt?.length);
 
-    if (apiKeyError || !apiKeyData) {
-      return new Response(JSON.stringify({ error: 'API key not configured' }), {
-        status: 500,
+    if (!prompt) {
+      return new Response(JSON.stringify({ error: 'No prompt provided' }), {
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const { prompt } = await req.json()
+    // Use the hardcoded API key for now
+    const apiKey = "AIzaSyDY7qMaXLfpEPUJmyyzF5tLpKVtSIt0fUg";
+    
+    console.log('Making request to Gemini API');
 
     // Make request to Gemini API
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKeyData.key_value}`, {
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -85,34 +92,53 @@ serve(async (req) => {
       }),
     })
 
-    const result = await geminiResponse.json()
+    console.log('Gemini API response status:', geminiResponse.status);
 
     if (!geminiResponse.ok) {
-      return new Response(JSON.stringify({ error: 'AI API error' }), {
+      const errorText = await geminiResponse.text();
+      console.error('Gemini API error:', errorText);
+      return new Response(JSON.stringify({ error: 'AI API error: ' + errorText }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Update user usage
-    await supabaseClient
-      .from('profiles')
-      .update({ 
-        daily_uses_remaining: profile.daily_uses_remaining - 1,
-        total_uses: profile.total_uses + 1
-      })
-      .eq('id', user.id)
+    const result = await geminiResponse.json()
+    console.log('Gemini response received');
+
+    // Update user usage (but not for diddy)
+    if (profile.username !== 'diddy') {
+      console.log('Updating usage for user:', profile.username);
+      await supabaseClient
+        .from('profiles')
+        .update({ 
+          daily_uses_remaining: profile.daily_uses_remaining - 1,
+          total_uses: profile.total_uses + 1
+        })
+        .eq('id', user.id)
+    } else {
+      console.log('Updating total uses for diddy');
+      await supabaseClient
+        .from('profiles')
+        .update({ 
+          total_uses: profile.total_uses + 1
+        })
+        .eq('id', user.id)
+    }
 
     // Log usage
     await supabaseClient
       .from('usage_logs')
       .insert({ user_id: user.id })
 
+    console.log('Usage updated successfully');
+
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
 
   } catch (error) {
+    console.error('Edge function error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

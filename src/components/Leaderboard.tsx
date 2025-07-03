@@ -2,8 +2,9 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Trophy, Medal, Award, Crown, Sparkles } from "lucide-react";
+import { Trophy, Medal, Award, Crown, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface LeaderboardProps {
   open: boolean;
@@ -20,6 +21,7 @@ interface UserProfile {
 export const Leaderboard = ({ open, onOpenChange }: LeaderboardProps) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (open) {
@@ -28,21 +30,35 @@ export const Leaderboard = ({ open, onOpenChange }: LeaderboardProps) => {
   }, [open]);
 
   const fetchLeaderboard = async () => {
+    setLoading(true);
     try {
+      console.log('Fetching leaderboard data...');
+      
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, username, display_style, total_uses')
         .order('total_uses', { ascending: false })
         .limit(10);
 
       if (error) {
         console.error('Error fetching leaderboard:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load leaderboard. Please try again.",
+          variant: "destructive",
+        });
         return;
       }
 
+      console.log('Leaderboard data fetched:', data);
       setUsers(data || []);
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load leaderboard. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -95,7 +111,7 @@ export const Leaderboard = ({ open, onOpenChange }: LeaderboardProps) => {
 
         {loading ? (
           <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+            <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
           </div>
         ) : (
           <div className="space-y-3 max-h-96 overflow-y-auto">

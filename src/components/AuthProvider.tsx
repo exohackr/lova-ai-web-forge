@@ -62,10 +62,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     try {
+      console.log('Fetching profile for user:', userId);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -77,18 +78,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         return;
       }
 
+      console.log('Profile fetched:', data?.username);
+
       // Check if user is banned and if temp ban has expired
       if (data.is_banned && data.ban_expires_at) {
         const banExpiry = new Date(data.ban_expires_at);
         if (banExpiry < new Date()) {
           // Temp ban has expired, unban the user
-          await supabase
+          const { error: updateError } = await supabase
             .from('profiles')
             .update({ is_banned: false, ban_expires_at: null })
             .eq('id', userId);
           
-          data.is_banned = false;
-          data.ban_expires_at = null;
+          if (!updateError) {
+            data.is_banned = false;
+            data.ban_expires_at = null;
+          }
         }
       }
 
@@ -116,7 +121,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       try {
         console.log('Initializing auth...');
         
-        // First, get the current session
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -134,19 +138,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           await fetchProfile(currentSession.user.id);
         }
         
-        setIsLoading(false);
-        setInitialized(true);
-        
       } catch (error) {
         console.error('Auth initialization error:', error);
+      } finally {
         if (mounted) {
           setIsLoading(false);
-          setInitialized(true);
         }
       }
     };
 
-    // Set up the auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
@@ -157,23 +157,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Use setTimeout to avoid potential deadlocks
-          setTimeout(() => {
-            if (mounted) {
-              fetchProfile(session.user.id);
-            }
-          }, 0);
+          await fetchProfile(session.user.id);
         } else {
           setProfile(null);
         }
         
-        if (initialized) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     );
 
-    // Initialize auth
     initializeAuth();
 
     return () => {
@@ -184,6 +176,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const login = async (email: string, password: string) => {
     try {
+      console.log('Attempting login for:', email);
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -203,38 +197,53 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const signup = async (email: string, password: string, username: string) => {
-    // Get user's IP address for registration tracking
-    let userIP = null;
     try {
-      const response = await fetch('https://api.ipify.org?format=json');
-      const data = await response.json();
-      userIP = data.ip;
-    } catch (error) {
-      console.error('Failed to get IP:', error);
-    }
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          username: username,
-          ip: userIP
-        },
-        emailRedirectTo: `${window.location.origin}/`
+      console.log('Attempting signup for:', email, 'with username:', username);
+      
+      // Get user's IP address for registration tracking
+      let userIP = null;
+      try {
+        const response = await fetch('https://api.ipify.org?format=json');
+        const data = await response.json();
+        userIP = data.ip;
+      } catch (error) {
+        console.error('Failed to get IP:', error);
       }
-    });
-    return { error };
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username: username,
+            ip: userIP
+          },
+          emailRedirectTo: `${window.location.origin}/`
+        }
+      });
+      
+      if (error) {
+        console.error('Signup error:', error);
+      } else {
+        console.log('Signup successful for:', email);
+      }
+      
+      return { error };
+    } catch (error) {
+      console.error('Signup exception:', error);
+      return { error };
+    }
   };
 
   const logout = async () => {
     try {
+      console.log('Attempting logout...');
+      
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('Logout error:', error);
       } else {
         console.log('Logout successful');
-        // Clear state immediately
         setUser(null);
         setSession(null);
         setProfile(null);
